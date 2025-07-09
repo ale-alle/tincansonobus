@@ -4,6 +4,7 @@
 #include "PeersContainerView.h"
 #include "JitterBufferMeter.h"
 #include <set>
+#include <cmath> // For std::sqrt, std::ceil
 
 using namespace SonoAudio;
 
@@ -306,33 +307,52 @@ void PeersContainerView::configLabel(Label *label, int ltype)
     }
 }
 
-
-
-
-
 void PeersContainerView::resized()
 {
     Rectangle<int> bounds = getLocalBounds().reduced(5, 0);
     bounds.removeFromLeft(3);
 
-    // if the width has changed, need to rebuild layout potentially
+    // If the width has changed, need to rebuild layout potentially
     if (mLastWidth != bounds.getWidth()) {
         mLastWidth = bounds.getWidth();
         updateLayout();
     }
 
-    peersBox.performLayout(bounds);
+    // --- Begin Grid Layout ---
+    int numPeers = mPeerViews.size();
+    if (numPeers == 0)
+        return;
 
-    mPeerViewBounds.clearQuick();
+    // Calculate grid size
+    int numColumns = static_cast<int>(std::ceil(std::sqrt(numPeers)));
+    int numRows = static_cast<int>(std::ceil(static_cast<float>(numPeers) / numColumns));
 
-    for (int i=0; i < mPeerViews.size(); ++i) {
-        PeerViewInfo * pvf = mPeerViews.getUnchecked(i);
-        pvf->resized();
+    juce::Grid grid;
+    grid.rowGap = 8_px;
+    grid.columnGap = 8_px;
 
-        mPeerViewBounds.add(pvf->getBounds());
-    }
-    
-    Component* dw = nullptr; // this->findParentComponentOfClass<DocumentWindow>();    
+    // Set up grid tracks
+    using Track = juce::Grid::TrackInfo;
+    grid.templateColumns.clear();
+    grid.templateRows.clear();
+    for (int i = 0; i < numColumns; ++i)
+        grid.templateColumns.add(Track(1_fr));
+    for (int i = 0; i < numRows; ++i)
+        grid.templateRows.add(Track(1_fr));
+
+    // Add PeerViewInfo components as grid items
+    grid.items.clear();
+    for (int i = 0; i < numPeers; ++i)
+        grid.items.add(juce::GridItem(*mPeerViews.getUnchecked(i)));
+
+    grid.performLayout(bounds);
+
+    // Resize each PeerViewInfo (optional, if they need to layout their children)
+    for (int i = 0; i < numPeers; ++i)
+        mPeerViews.getUnchecked(i)->resized();
+
+    // Dismiss any callouts as before (unchanged)
+    Component* dw = nullptr;
     if (!dw)
         dw = this->findParentComponentOfClass<AudioProcessorEditor>();
     if (!dw)
@@ -340,24 +360,22 @@ void PeersContainerView::resized()
     if (!dw)
         dw = this;
 
-    if (auto * callout = dynamic_cast<CallOutBox*>(pannerCalloutBox.get())) {
+    if (auto* callout = dynamic_cast<CallOutBox*>(pannerCalloutBox.get())) {
         callout->dismiss();
         pannerCalloutBox = nullptr;
     }
-    if (auto * callout = dynamic_cast<CallOutBox*>(sendOptionsCalloutBox.get())) {
+    if (auto* callout = dynamic_cast<CallOutBox*>(sendOptionsCalloutBox.get())) {
         callout->dismiss();
         sendOptionsCalloutBox = nullptr;
     }
-    if (auto * callout = dynamic_cast<CallOutBox*>(recvOptionsCalloutBox.get())) {
+    if (auto* callout = dynamic_cast<CallOutBox*>(recvOptionsCalloutBox.get())) {
         callout->dismiss();
         recvOptionsCalloutBox = nullptr;
     }
-    if (auto * callout = dynamic_cast<CallOutBox*>(effectsCalloutBox.get())) {
+    if (auto* callout = dynamic_cast<CallOutBox*>(effectsCalloutBox.get())) {
         callout->dismiss();
         effectsCalloutBox = nullptr;
     }
-
-
 }
 
 void PeersContainerView::showPopTip(const String & message, int timeoutMs, Component * target, int maxwidth)
