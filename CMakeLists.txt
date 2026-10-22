@@ -8,6 +8,18 @@
 
 cmake_minimum_required(VERSION 3.15)
 
+# Tin Can settings (see BUILD-WINDOWS.md)
+set(TINCAN_API_BASE "https://tincanstudios.ca" CACHE STRING "Tin Can app server that redeems tincan://join tickets")
+set(TINCAN_SERVER_HOST "" CACHE STRING "Default connection server host (empty keeps aoo.sonobus.net until T-023)")
+set(TINCAN_SERVER_PORT "" CACHE STRING "Default connection server port (empty keeps 10998)")
+set(TINCAN_SERVER_DEFS "")
+if (NOT "${TINCAN_SERVER_HOST}" STREQUAL "")
+    list(APPEND TINCAN_SERVER_DEFS TINCAN_SERVER_HOST="${TINCAN_SERVER_HOST}")
+endif()
+if (NOT "${TINCAN_SERVER_PORT}" STREQUAL "")
+    list(APPEND TINCAN_SERVER_DEFS TINCAN_SERVER_PORT=${TINCAN_SERVER_PORT})
+endif()
+
 
 if (WIN32)
     #set (CMAKE_GENERATOR_TOOLSET ClangCL)
@@ -324,6 +336,10 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/SonobusTypes.h
         Source/SuggestNewGroupView.cpp
         Source/SuggestNewGroupView.h
+        Source/TinCanJoin.cpp
+        Source/TinCanJoin.h
+        Source/TinCanPacketCipher.cpp
+        Source/TinCanPacketCipher.h
         Source/VDONinjaView.h
         Source/VersionInfo.cpp
         Source/VersionInfo.h
@@ -382,9 +398,15 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         deps/aoo/deps/oscpack/osc/OscTypes.h
     )
 
+    set(MonocypherSourceFiles
+        deps/monocypher/monocypher.c
+        deps/monocypher/monocypher.h
+    )
+
     target_sources("${target_name}" PRIVATE 
            ${SourceFiles} 
            ${AOOSourceFiles}
+           ${MonocypherSourceFiles}
        )
 
     # No, we don't want our source buried in extra nested folders
@@ -393,6 +415,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
     # The source tree should uhhh, still look like the source tree, yo
     source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/Source PREFIX "" FILES ${SourceFiles})
     source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/deps/aoo PREFIX "aoo" FILES ${AOOSourceFiles})
+    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/deps/monocypher PREFIX "monocypher" FILES ${MonocypherSourceFiles})
 
     # Move the INTERFACE auto-created JUCE library stuff into its own folder
     source_group("JUCE Library Code" REGULAR_EXPRESSION "juce_")
@@ -455,6 +478,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         JUCE_LOAD_CURL_SYMBOLS_LAZILY=1
         FF_AUDIO_ALLOW_ALLOCATIONS_IN_MEASURE_BLOCK=0
         SONOBUS_BUILD_VERSION="${VERSION}"
+        TINCAN_API_BASE="${TINCAN_API_BASE}"
+        ${TINCAN_SERVER_DEFS}
         ${PLAT_COMPILE_DEFS} )
 
     juce_add_binary_data("${target_name}_SBData" SOURCES
@@ -629,3 +654,8 @@ sono_add_custom_plugin_target(SonoBus SonoBus "${FormatsToBuild}" FALSE  "NBus")
 # add VSTi target
 sono_add_custom_plugin_target(SonoBusInst "SonoBusInstrument" "VST3" TRUE  "IBus")
 
+# Tin Can unit tests (no JUCE): cmake --build build --target TinCanTests --config Release
+add_executable(TinCanTests EXCLUDE_FROM_ALL
+    tests/TinCanPacketCipherTest.cpp
+    Source/TinCanPacketCipher.cpp
+    deps/monocypher/monocypher.c)

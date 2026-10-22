@@ -1,14 +1,13 @@
 # Building Tin Can (SonoBus fork) on Windows
 
-Status: written from the build files in this repo (`CMakeLists.txt`, `setupcmakewin.sh`, `buildcmake.sh`, `release/`). **Not yet tested on a Windows machine** — record anything that differs in the "Build log" at the bottom.
+Status: **verified 2026-10-22** on Windows 11 with VS 2022 (v143) and CMake 4.0.2 — see the build log at the bottom. Tin Can client changes are described in `doc/TINCAN-CLIENT.md`.
 
 ## 1. Install the tools (one time)
 1. **Git for Windows** — https://git-scm.com/download/win (also gives you Git Bash).
 2. **CMake 3.15 or newer** — https://cmake.org/download/ (tick "Add CMake to the system PATH").
 3. **Visual Studio 2022 Community** — https://visualstudio.microsoft.com/
    - Workload: **Desktop development with C++**.
-   - Individual components: **MSVC v142 – VS 2019 C++ x64/x86 build tools** and a **Windows 10/11 SDK**.
-   - Why v142: the bundled JUCE (6.0.8, 2021) predates VS 2022; building with the VS 2019 toolset avoids compiler surprises. Try the default v143 toolset later if you like.
+   - The default **v143** toolset and a **Windows 10/11 SDK** are enough. The build uses the JUCE **7.0.8** copy in `deps/juce` (not the older `JUCE/` folder), which supports VS 2022; the v142 toolset is not needed.
 4. **Steinberg ASIO SDK** — https://www.steinberg.net/developers/ (free; GPLv3 licence option since Oct 2025).
 5. **Inno Setup 6** (only for making the installer) — https://jrsoftware.org/isinfo.php
 
@@ -29,14 +28,50 @@ JUCE, AOO and prebuilt Opus libraries (`deps\windows\Release`) are already insid
 ## 3. Configure and build (Developer PowerShell for VS 2022)
 ```powershell
 cd C:\dev\tincansonobus
-cmake -G "Visual Studio 17 2022" -A x64 -T v142 -B build
-cmake --build build --config Release --parallel
+cmake -G "Visual Studio 17 2022" -A x64 -B build -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+cmake --build build --config Release --parallel --target SonoBus_Standalone
 ```
-Output: `build\SonoBus_artefacts\Release\Standalone\SonoBus.exe` (plus a VST3 plugin, which we don't need for lessons).
+Output: `build\SonoBus_artefacts\Release\Standalone\SonoBus.exe`. Drop `--target …` to also build the VST3 plugins (not needed for lessons).
+
+`-DCMAKE_POLICY_VERSION_MINIMUM=3.5` is required with CMake 4.x (bundled dependencies declare very old minimum versions) and harmless on 3.x.
+
+### Tin Can build options
+| CMake option | Default | Purpose |
+|---|---|---|
+| `TINCAN_API_BASE` | `https://tincanstudios.ca` | App server that redeems `tincan://join` tickets |
+| `TINCAN_SERVER_HOST` / `TINCAN_SERVER_PORT` | empty → `aoo.sonobus.net:10998` | Default connection server; set to ours once T-023 exists |
+
+Example: `cmake -B build -DTINCAN_SERVER_HOST=connect.tincanstudios.ca`.
+
+### Unit tests
+```powershell
+cmake --build build --config Release --target TinCanTests
+build\Release\TinCanTests.exe      # prints "all checks passed"
+```
 
 Debug build (for stepping through code in Visual Studio): `cmake --build build --config Debug`, or open `build\SonoBus.sln`.
 
 The original scripts (`setupcmakewin.sh`, `buildcmake.sh`) do the same from Git Bash but target the VS 2019 generator.
+
+## 3b. Test encryption and join links on one PC
+The app is single-instance (so a clicked `tincan://` link reaches the running copy); `--multi-instance` allows two copies. The first copy hosts a connection server on port 10999. Allowing the Windows Firewall prompt is not needed for this local test.
+
+**Encryption** — same key connects, different keys must not:
+```powershell
+$exe = ".\build\SonoBus_artefacts\Release\Standalone\SonoBus.exe"
+$k = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+& $exe --multi-instance -c localhost:10999 -g enctest -n A -k $k
+& $exe --multi-instance -c localhost:10999 -g enctest -n B -k $k
+```
+Both show 2 users within seconds. Repeat with a second, different key for B: each stays at 1 user.
+
+**Join link** — with the mock redeem API standing in for T-019:
+```powershell
+python scripts\tincan-mock-redeem.py           # terminal 1
+$env:TINCAN_API_BASE = "http://localhost:8788" # terminal 2
+& $exe --multi-instance "tincan://join?ticket=demo-ok"   # run twice
+```
+Both join "Demo lesson" and connect; room name, password and share-link button are hidden. `ticket=wrong` shows "Can't join lesson".
 
 ## 4. Smoke test
 1. Run `SonoBus.exe`; pick your audio interface with the **ASIO** driver type; buffer 128 or 256 samples.
@@ -44,17 +79,17 @@ The original scripts (`setupcmakewin.sh`, `buildcmake.sh`) do the same from Git 
 3. Note: this still uses `aoo.sonobus.net` and sends unencrypted peer-to-peer audio — test only with people who know that (D-009 in the tincanstudios-site docs).
 
 ## 5. Installer (optional for now)
-`release\wininstaller.iss` builds the installer with Inno Setup. It expects the files staged by `release\distwin.sh` and a code-signing setup (`SignTool=`); for unsigned test builds, comment out the `SignTool`/`SignedUninstaller` lines. This is also where the `tincan://` link handler will be registered later (T-018).
+`release\wininstaller.iss` builds the installer with Inno Setup. It expects the files staged by `release\distwin.sh` and a code-signing setup (`SignTool=`); for unsigned test builds, comment out the `SignTool`/`SignedUninstaller` lines. It also registers the `tincan://` link handler (T-018). Not yet built or tested with Inno Setup.
 
 ## Troubleshooting
 | Symptom | Likely fix |
 |---|---|
 | `asio.h` / `asiosys.h` not found | ASIO SDK not at `..\asiosdk\common` (check folder name) |
 | `opus.lib` not found | Building Win32 without `deps\windows\Release32`, or wrong config — use `-A x64` and `Release`/`Debug` |
-| Generator/toolset error | Install the **MSVC v142** component, or drop `-T v142` to try the default toolset |
+| `Compatibility with CMake < 3.5 has been removed` | Add `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` (CMake 4.x) |
 | No ASIO devices listed | Install your interface's ASIO driver (or ASIO4ALL for built-in audio) |
 
 ## Build log
 | Date | Windows | VS / toolset | Result | Notes |
 |---|---|---|---|---|
-| | | | | |
+| 2026-10-22 | Windows 11 Home 26200 | VS 2022 Community, MSVC 14.44 (v143), CMake 4.0.2, ASIO SDK 2.3.3 | ✅ Release x64 | Unmodified fork, then with Tin Can changes. `--version` → 1.7.2. Needed the CMake policy flag. ~540 warnings, all upstream. TinCanTests pass; §3b tests pass (same key connects, different keys don't, join link OK, bad ticket → error) |

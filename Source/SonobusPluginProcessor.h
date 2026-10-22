@@ -22,6 +22,8 @@
 
 #include "SoundboardChannelProcessor.h"
 
+#include "TinCanPacketCipher.h"
+
 typedef MVerb<float> MVerbFloat;
 
 namespace SonoAudio {
@@ -31,8 +33,17 @@ class Metronome;
 
 #define MAX_PEERS 32
 #define MAX_CHANGROUPS 64
+// Tin Can: set TINCAN_SERVER_HOST / TINCAN_SERVER_PORT in CMake to use our own connection server (T-023)
+#ifdef TINCAN_SERVER_PORT
+#define DEFAULT_SERVER_PORT TINCAN_SERVER_PORT
+#else
 #define DEFAULT_SERVER_PORT 10998
+#endif
+#ifdef TINCAN_SERVER_HOST
+#define DEFAULT_SERVER_HOST TINCAN_SERVER_HOST
+#else
 #define DEFAULT_SERVER_HOST "aoo.sonobus.net"
+#endif
 
 
 struct AooServerConnectionInfo
@@ -49,7 +60,10 @@ struct AooServerConnectionInfo
     bool   groupIsPublic = false;
     String serverHost;
     int    serverPort;
-    
+
+    // Tin Can: base64 per-lesson packet key from a join ticket, never saved or shown
+    String lessonKey;
+
     int64 timestamp; // milliseconds since 1970
 };
 
@@ -296,6 +310,12 @@ public:
     
     bool connectToServer(const String & host, int port, const String & username, const String & passwd="");
     bool isConnectedToServer() const;
+
+    // Tin Can: per-lesson encryption of all peer UDP traffic (D-009).
+    // An empty or invalid key clears it. While set, unencrypted peer packets are dropped.
+    bool setLessonKey(const String & base64Key);
+    bool hasLessonKey() const { return mPacketCipher.hasKey(); }
+    int64_t getDroppedCipherPacketCount() const { return mDroppedCipherPackets; }
     bool disconnectFromServer();
     double getElapsedConnectedTime() const { return mSessionConnectionStamp > 0 ? (Time::getMillisecondCounterHiRes() - mSessionConnectionStamp) * 1e-3 : 0.0; }
 
@@ -1085,6 +1105,9 @@ private:
     aoo::net::iclient::pointer mAooClient;
 
     std::unique_ptr<EndpointState> mServerEndpoint;
+
+    TinCan::PacketCipher mPacketCipher;
+    std::atomic<int64_t> mDroppedCipherPackets { 0 };
     
     bool mAutoconnectGroupPeers = true;
     bool mIsConnectedToServer = false;

@@ -24,6 +24,7 @@
 #include "OptionsView.h"
 #include "ReverbView.h"
 #include "VDONinjaView.h"
+#include "TinCanJoin.h"
 
 class RandomSentenceGenerator;
 class WaveformTransportComponent;
@@ -164,7 +165,12 @@ public:
     std::function<void()> saveSettingsIfNeeded; // = []() { return 0; };
 
     void handleURL(const String & urlstr);
-    
+
+    // Tin Can: tincan://join?ticket=... from the website's Join lesson button
+    void handleTinCanURL(const String & urlstr);
+    bool isInLessonRoom() const { return processor.hasLessonKey(); }
+    String getDisplayGroupName() const { return mLessonTitle.isNotEmpty() ? mLessonTitle : TRANS("Lesson room"); }
+
 
     ChannelGroupsView * getInputChannelGroupsView() { return mInputChannelsContainer.get(); }
     PeersContainerView * getPeersContainerView() { return mPeerContainer.get(); }
@@ -555,7 +561,10 @@ private:
     bool mAltReleaseShouldAct = false;
 
     AooServerConnectionInfo currConnectionInfo;
-    
+
+    std::unique_ptr<TinCan::TicketRedeemer> mTicketRedeemer;
+    String mLessonTitle;
+
     std::unique_ptr<TableListBox> mRemoteSinkListBox;
     std::unique_ptr<TableListBox> mRemoteSourceListBox;
     

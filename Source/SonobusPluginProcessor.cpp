@@ -200,6 +200,7 @@ struct SonobusAudioProcessor::EndpointState {
     
 
     DatagramSocket *owner;
+    TinCan::PacketCipher *cipher = nullptr;
     //struct sockaddr_storage addr;
     //socklen_t addrlen;
     std::unique_ptr<DatagramSocket::RemoteAddrInfo> peer;
@@ -371,10 +372,32 @@ struct SonobusAudioProcessor::RemotePeer {
 
 
 
+// Tin Can: with a lesson key set, every packet except those addressed to the
+// connection server (/aoo/server/...) is sealed. Returns false if it must not be sent.
+static bool tincan_seal_if_needed(SonobusAudioProcessor::EndpointState * endpoint, const char *& data, int32_t & size, char * sealbuf, int sealcap)
+{
+    if (!endpoint->cipher || !endpoint->cipher->hasKey()) return true;
+
+    int32_t type;
+    if (aoonet_parse_pattern(data, size, &type) > 0 && type == AOO_TYPE_SERVER) return true;
+
+    int n = endpoint->cipher->seal(data, size, sealbuf, sealcap);
+    if (n < 0) return false; // never fall back to plaintext
+
+    data = sealbuf;
+    size = n;
+    return true;
+}
+
 static int32_t endpoint_send(void *e, const char *data, int32_t size)
 {
     SonobusAudioProcessor::EndpointState * endpoint = static_cast<SonobusAudioProcessor::EndpointState*>(e);
     int result = -1;
+
+    const int32_t origsize = size;
+    char sealbuf[AOO_MAXPACKETSIZE + TinCan::PacketCipher::Overhead];
+    if (!tincan_seal_if_needed(endpoint, data, size, sealbuf, sizeof(sealbuf))) return -1;
+
     if (endpoint->peer) {
         result = endpoint->owner->write(*(endpoint->peer), data, size);
     } else {
@@ -388,7 +411,7 @@ static int32_t endpoint_send(void *e, const char *data, int32_t size)
     else if (result < 0) {
         DBG("Error sending bytes to endpoint " << endpoint->ipaddr);
     }
-    return result;
+    return result > 0 ? origsize : result;
 }
 
 static int32_t client_send(void *e, const char *data, int32_t size, void *raddr)
@@ -396,17 +419,21 @@ static int32_t client_send(void *e, const char *data, int32_t size, void *raddr)
     SonobusAudioProcessor::EndpointState * endpoint = static_cast<SonobusAudioProcessor::EndpointState*>(e);
     int result = -1;
 
+    const int32_t origsize = size;
+    char sealbuf[AOO_MAXPACKETSIZE + TinCan::PacketCipher::Overhead];
+    if (!tincan_seal_if_needed(endpoint, data, size, sealbuf, sizeof(sealbuf))) return -1;
+
     const struct sockaddr *addr = (struct sockaddr *)raddr;
-    
+
     if (addr->sa_family == AF_INET){
         result = (int) ::sendto(endpoint->owner->getRawSocketHandle(), data, (size_t)size, 0, addr, sizeof(struct sockaddr_in));
     }
-    
+
     if (result > 0) {
         endpoint->sentBytes += result + UDP_OVERHEAD_BYTES;
     }
-    
-    return result;
+
+    return result > 0 ? origsize : result;
 }
 
 
@@ -1004,7 +1031,8 @@ void SonobusAudioProcessor::initializeAoo(int udpPort)
     
     mServerEndpoint = std::make_unique<EndpointState>();
     mServerEndpoint->owner = mUdpSocket.get();
-    
+    mServerEndpoint->cipher = &mPacketCipher;
+
     if (mUdpLocalPort > 0) {
         mAooClient.reset(aoo::net::iclient::create(mServerEndpoint.get(), client_send, mUdpLocalPort));
     }
@@ -1184,8 +1212,28 @@ bool SonobusAudioProcessor::disconnectFromServer()
     return true;
 }
 
+bool SonobusAudioProcessor::setLessonKey(const String & base64Key)
+{
+    uint8_t key[TinCan::PacketCipher::KeySize];
+
+    if (base64Key.isEmpty() || !TinCan::PacketCipher::decodeKey(base64Key.toRawUTF8(), key)) {
+        mPacketCipher.clearKey();
+        return false;
+    }
+
+    bool ok = mPacketCipher.setKey(key);
+    if (!ok) {
+        mPacketCipher.clearKey();
+    }
+    TinCan::PacketCipher::wipe(key, sizeof(key));
+    return ok;
+}
+
 void SonobusAudioProcessor::addRecentServerConnectionInfo(const AooServerConnectionInfo & cinfo)
 {
+    // Tin Can: lesson rooms use one-time credentials that must never be stored
+    if (cinfo.lessonKey.isNotEmpty()) return;
+
     const ScopedLock sl (mRecentsLock);
 
     // look for existing match, and update only timestamp if found, otherwise add to end
@@ -2225,6 +2273,7 @@ SonobusAudioProcessor::EndpointState * SonobusAudioProcessor::findOrAddEndpoint(
         // add it as new
         endpoint = mEndpoints.add(new EndpointState(host, port));
         endpoint->owner = mUdpSocket.get();
+        endpoint->cipher = &mPacketCipher;
         endpoint->peer = std::make_unique<DatagramSocket::RemoteAddrInfo>(host, port);
         DBG("Added new endpoint for " << host << ":" << port);
     }
@@ -2265,23 +2314,43 @@ void SonobusAudioProcessor::updateSafetyMuting(RemotePeer * peer)
 void SonobusAudioProcessor::doReceiveData()
 {
     // receive from udp port, and parse packet
-    char buf[AOO_MAXPACKETSIZE];
+    char rawbuf[AOO_MAXPACKETSIZE + TinCan::PacketCipher::Overhead];
+    char plainbuf[AOO_MAXPACKETSIZE];
+    char * buf = rawbuf;
     String senderIP;
     int senderPort;
-    
-    int nbytes = mUdpSocket->read(buf, AOO_MAXPACKETSIZE, false, senderIP, senderPort);
+
+    int nbytes = mUdpSocket->read(rawbuf, sizeof(rawbuf), false, senderIP, senderPort);
 
     if (nbytes == 0) return;
     else if (nbytes < 0) {
         DBG("Error receiving UDP");
         return;
     }
-    
+
+    // Tin Can: open sealed packets; with a lesson key, only server replies may arrive unsealed
+    if (TinCan::PacketCipher::isSealed(rawbuf, nbytes)) {
+        int plainlen = mPacketCipher.open(rawbuf, nbytes, plainbuf, sizeof(plainbuf));
+        if (plainlen < 0) {
+            ++mDroppedCipherPackets; // no key, another lesson's key, or forged
+            return;
+        }
+        buf = plainbuf;
+        nbytes = plainlen;
+    }
+    else if (mPacketCipher.hasKey()) {
+        int32_t ntype;
+        if (!(aoonet_parse_pattern(rawbuf, nbytes, &ntype) > 0 && ntype == AOO_TYPE_CLIENT)) {
+            ++mDroppedCipherPackets;
+            return;
+        }
+    }
+
     // find endpoint from sender info
     EndpointState * endpoint = findOrAddEndpoint(senderIP, senderPort);
-    
+
     endpoint->recvBytes += nbytes + UDP_OVERHEAD_BYTES;
-    
+
     // parse packet for AOO events
     
     int32_t type, id, dummyid;

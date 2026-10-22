@@ -76,6 +76,11 @@ Root: HKCR; Subkey: "sonobus"; ValueType: "string"; ValueData: "URL:sonobus Prot
 Root: HKCR; Subkey: "sonobus"; ValueType: "string"; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCR; Subkey: "sonobus\DefaultIcon"; ValueType: "string"; ValueData: "{app}\SonoBus.exe,0"
 Root: HKCR; Subkey: "sonobus\shell\open\command"; ValueType: "string"; ValueData: """{app}\SonoBus.exe"" ""%1"""
+; Tin Can: website "Join lesson" button opens tincan://join?ticket=... (T-018)
+Root: HKCR; Subkey: "tincan"; ValueType: "string"; ValueData: "URL:Tin Can Protocol"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "tincan"; ValueType: "string"; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCR; Subkey: "tincan\DefaultIcon"; ValueType: "string"; ValueData: "{app}\SonoBus.exe,0"
+Root: HKCR; Subkey: "tincan\shell\open\command"; ValueType: "string"; ValueData: """{app}\SonoBus.exe"" ""%1"""
 
 
 [Code]

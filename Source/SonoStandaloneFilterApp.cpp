@@ -114,7 +114,9 @@ public:
 
     const String getApplicationName() override              { return JucePlugin_Name; }
     const String getApplicationVersion() override           { return JucePlugin_VersionString; }
-    bool moreThanOneInstanceAllowed() override              { return true; }
+    // Tin Can: one instance, so a tincan:// link clicked in the browser goes to the
+    // running app (anotherInstanceStarted). --multi-instance allows more for testing.
+    bool moreThanOneInstanceAllowed() override              { return getCommandLineParameters().contains("--multi-instance"); }
 
     SonoLookAndFeel  sonoLNF;
 
@@ -315,7 +317,11 @@ public:
         const String loadSetupSpec("-l|--load-setup");
         const String loadSetupSpecDesc("-l|--load-setup <setup-filename>");
 
-        
+        const String lessonKeySpec("-k|--lesson-key");
+        const String lessonKeySpecDesc("-k|--lesson-key <base64-key>");
+
+        const String multiInstanceSpec("--multi-instance");
+
 
         app.addCommand ({ helpSpec, helpSpec, TRANS("Prints the list of commands"), {}, nullptr });
         app.addCommand ({ versionSpec, versionSpec, TRANS("Prints the current version number only"), {}, nullptr });
@@ -347,6 +353,16 @@ public:
         app.addCommand ({ loadSetupSpec, loadSetupSpecDesc,
             TRANS("Specify the filename of a setup file to load."),
             TRANS("The setup file can be created using the Save Setup feature from the full application, and includes any device selection, input mixer setup, and all other options. If you don't specify a full or relative pathname it will look for a preset file by that name in the last used setup folder."),
+            nullptr
+        });
+
+        app.addCommand ({ lessonKeySpec, lessonKeySpecDesc,
+            TRANS("Encrypt all peer audio with this 32-byte per-lesson key (testing and support; lessons normally get it from a join link)"), {},
+            nullptr
+        });
+
+        app.addCommand ({ multiInstanceSpec, multiInstanceSpec,
+            TRANS("Allow more than one copy of the app to run (testing)"), {},
             nullptr
         });
 
@@ -407,6 +423,21 @@ public:
             cmdlineConnInfo.userName = username.trim();
             copyInfo = true;
         }
+
+        auto lessonkey = arglist.removeValueForOption(lessonKeySpec);
+        if (lessonkey.isNotEmpty()) {
+            uint8_t keybytes[TinCan::PacketCipher::KeySize];
+            if (TinCan::PacketCipher::decodeKey(lessonkey.toRawUTF8(), keybytes)) {
+                cmdlineConnInfo.lessonKey = lessonkey;
+                copyInfo = true;
+            } else {
+                std::cout << TRANS("Error: the lesson key must be 32 bytes, base64 encoded.") << std::endl;
+                doImmediateQuit = true;
+            }
+            TinCan::PacketCipher::wipe(keybytes, sizeof(keybytes));
+        }
+
+        arglist.removeOptionIfFound(multiInstanceSpec);
 
         auto setupfile = arglist.removeValueForOption(loadSetupSpec);
         if (setupfile.isNotEmpty()) {
@@ -473,6 +504,10 @@ public:
                             // only copy info
                             DBG("COPYING INITIAL");
                             sonoeditor->connectWithInfo(cmdlineConnInfo, false, true);
+                        }
+                        else if (cmdlineArgUrl.isNotEmpty() && TinCan::isTinCanURL(cmdlineArgUrl)) {
+                            // Tin Can join link that launched the app (Windows passes it as an argument)
+                            sonoeditor->handleURL(cmdlineArgUrl);
                         }
                         else if (cmdlineArgUrl.isNotEmpty()) {
 #if JUCE_LINUX
@@ -548,6 +583,7 @@ public:
 
                 if (doInitialConnect) {
                     DBG("CONNECTING HEADLESS INITIAL");
+                    sonoproc->setLessonKey(cmdlineConnInfo.lessonKey);
                     sonoproc->connectToServer(cmdlineConnInfo.serverHost, cmdlineConnInfo.serverPort, cmdlineConnInfo.userName, cmdlineConnInfo.userPassword);
 
                     // HACK FOR NOW - todo add listener
@@ -696,7 +732,8 @@ public:
     }
     
     void urlOpened(const URL & url) override {
-        DBG("Url opened: " << url.toString(true));
+        // never log join tickets
+        DBG("Url opened: " << (TinCan::isTinCanURL(url.toString(false)) ? String("tincan://(redacted)") : url.toString(true)));
         
         if (mainWindow.get() != nullptr) {
             
@@ -713,7 +750,7 @@ public:
     
     void anotherInstanceStarted (const String& url) override    {
         
-        DBG("Url handled from another instance: " << url);
+        DBG("Url handled from another instance: " << (url.contains("tincan:") ? String("tincan://(redacted)") : url));
         
         if (mainWindow.get() != nullptr) {
             

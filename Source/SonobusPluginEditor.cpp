@@ -2816,8 +2816,53 @@ void SonobusAudioProcessorEditor::updateSliderSnap()
 }
 
 
+void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
+{
+    String ticket;
+    if (!TinCan::parseJoinURL(urlstr, ticket)) {
+        TinCan::JoinResult bad;
+        AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, TRANS("Can't join lesson"), bad.getUserMessage(), TRANS("OK"));
+        return;
+    }
+
+    if (mTicketRedeemer) {
+        return; // already joining
+    }
+
+    mMainMessageLabel->setText(TRANS("Joining your lesson..."), dontSendNotification);
+    mMainMessageLabel->setVisible(true);
+
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+
+    mTicketRedeemer = std::make_unique<TinCan::TicketRedeemer>(ticket, [safeThis](const TinCan::JoinResult & result) {
+        if (!safeThis) return;
+
+        // can't destroy the thread from inside its own callback chain synchronously
+        MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->mTicketRedeemer.reset(); });
+
+        if (result.status != TinCan::JoinResult::Ok) {
+            safeThis->mMainMessageLabel->setText("", dontSendNotification);
+            AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, TRANS("Can't join lesson"), result.getUserMessage(), TRANS("OK"));
+            return;
+        }
+
+        auto info = result.info;
+        info.userName = safeThis->currConnectionInfo.userName.isNotEmpty() ? safeThis->currConnectionInfo.userName : SystemStats::getFullUserName();
+        if (info.userName.trim().isEmpty()) info.userName = SystemStats::getComputerName();
+        info.timestamp = Time::getCurrentTime().toMilliseconds();
+
+        safeThis->mLessonTitle = result.title;
+        safeThis->connectWithInfo(info);
+    });
+}
+
 void SonobusAudioProcessorEditor::handleURL(const String & urlstr)
 {
+    if (TinCan::isTinCanURL(urlstr)) {
+        handleTinCanURL(urlstr);
+        return;
+    }
+
     URL url(urlstr);
     if (url.isWellFormed()) {
         if (!currConnected || currGroup.isEmpty()) {
@@ -3641,7 +3686,12 @@ void SonobusAudioProcessorEditor::updateState(bool rebuildInputChannels)
     if (!currGroup.isEmpty() && currConnected)
     {
         String grouptext;
-        grouptext << (currConnectionInfo.groupIsPublic ? TRANS("[P] ") : "") << currGroup;
+        if (isInLessonRoom()) {
+            // Tin Can: never show the generated room name
+            grouptext << getDisplayGroupName();
+        } else {
+            grouptext << (currConnectionInfo.groupIsPublic ? TRANS("[P] ") : "") << currGroup;
+        }
         mMainGroupLabel->setText(grouptext, dontSendNotification);
         String userstr;
 
@@ -3661,12 +3711,17 @@ void SonobusAudioProcessorEditor::updateState(bool rebuildInputChannels)
         mMainGroupImage->setVisible(true);
         mMainPersonImage->setVisible(true);
         mMainPeerLabel->setVisible(true);
-        mMainLinkButton->setVisible(true);
-        mMainLinkArrow->setVisible(true);
+        // the share link contains the group password, so no sharing from lesson rooms
+        mMainLinkButton->setVisible(!isInLessonRoom());
+        mMainLinkArrow->setVisible(!isInLessonRoom());
 
         if (processor.getNumberRemotePeers() == 0 && mPeerContainer->getPendingPeerCount() == 0) {
             String labstr;
-            labstr << TRANS("Waiting for other users to join group") << " \"" << currGroup << "\"...";
+            if (isInLessonRoom()) {
+                labstr << TRANS("Waiting for the other person to join your lesson...");
+            } else {
+                labstr << TRANS("Waiting for other users to join group") << " \"" << currGroup << "\"...";
+            }
             mMainMessageLabel->setText(labstr, dontSendNotification);
             mMainMessageLabel->setVisible(true);
         } else {
@@ -3961,7 +4016,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
         else if (ev.type == ClientEvent::GroupJoinEvent) {
             String statstr;
             if (ev.success) {
-                statstr = TRANS("Joined Group: ") + ev.group;
+                statstr = isInLessonRoom() ? TRANS("Joined lesson: ") + getDisplayGroupName() : TRANS("Joined Group: ") + ev.group;
 
                 //AccessibilityHandler::postAnnouncement(statstr, AccessibilityHandler::AnnouncementPriority::high);
 
@@ -4003,7 +4058,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
         else if (ev.type == ClientEvent::GroupLeaveEvent) {
             String statstr;
             if (ev.success) {
-                statstr = TRANS("Left Group: ") + ev.group;
+                statstr = isInLessonRoom() ? TRANS("Left lesson: ") + getDisplayGroupName() : TRANS("Left Group: ") + ev.group;
             } else {
                 statstr = TRANS("Failed to leave group: ") + ev.message;
             }

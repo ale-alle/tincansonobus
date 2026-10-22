@@ -1261,6 +1261,9 @@ void ConnectView::connectWithInfo(const AooServerConnectionInfo & info, bool all
     {
         processor.disconnectFromServer();
 
+        // Tin Can: lesson joins carry a per-lesson key, manual connects clear any previous one
+        processor.setLessonKey(currConnectionInfo.lessonKey);
+
         Timer::callAfterDelay(100, [this] {
             processor.connectToServer(currConnectionInfo.serverHost, currConnectionInfo.serverPort, currConnectionInfo.userName, currConnectionInfo.userPassword);
            // updateState();
@@ -1370,6 +1373,9 @@ bool ConnectView::handleSonobusURL(const URL & url)
     auto & pnames = url.getParameterNames();
     auto & pvals = url.getParameterValues();
 
+    // a plain group link is never a Tin Can lesson room
+    currConnectionInfo.lessonKey.clear();
+
     int ind;
     if ((ind = pnames.indexOf("g", true)) >= 0) {
         currConnectionInfo.groupName = pvals[ind];
@@ -1447,6 +1453,14 @@ void ConnectView::updateServerFieldsFromConnectionInfo()
     }
     mServerUsernameEditor->setText(currConnectionInfo.userName, false);
     mPublicServerUsernameEditor->setText(currConnectionInfo.userName, false);
+
+    if (currConnectionInfo.lessonKey.isNotEmpty()) {
+        // Tin Can lesson room: credentials are never shown
+        mServerGroupEditor->setText("", false);
+        mServerGroupPasswordEditor->setText("", false);
+        return;
+    }
+
     if (currConnectionInfo.groupIsPublic) {
         mPublicServerGroupEditor->setText(currConnectionInfo.groupName, false);
     } else if (currConnectionInfo.groupName.isNotEmpty()){
