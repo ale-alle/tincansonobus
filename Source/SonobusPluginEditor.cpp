@@ -2847,7 +2847,10 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
         }
 
         auto info = result.info;
-        info.userName = safeThis->currConnectionInfo.userName.isNotEmpty() ? safeThis->currConnectionInfo.userName : SystemStats::getFullUserName();
+        // prefer the name from the lesson booking; fall back to this app's name, then the computer's
+        if (info.userName.isEmpty()) {
+            info.userName = safeThis->currConnectionInfo.userName.isNotEmpty() ? safeThis->currConnectionInfo.userName : SystemStats::getFullUserName();
+        }
         if (info.userName.trim().isEmpty()) info.userName = SystemStats::getComputerName();
         info.timestamp = Time::getCurrentTime().toMilliseconds();
 

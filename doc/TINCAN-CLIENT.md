@@ -16,7 +16,8 @@ Content-Type: application/json
 {"ticket": "<ticket>"}
 
 200 {"server": "host[:port]", "group": "…", "groupPassword": "…",
-     "lessonKey": "<base64 of 32 random bytes>", "title": "Piano with Sam"}   // title optional
+     "lessonKey": "<base64 of 32 random bytes>", "title": "Lesson with Sam",
+     "userName": "Ava"}   // title and userName optional; userName = name shown to the other person (the child for a parent)
 4xx  ticket expired / used / not for this user  → "link has expired" message
 5xx or no connection                            → "couldn't reach Tin Can" message
 ```

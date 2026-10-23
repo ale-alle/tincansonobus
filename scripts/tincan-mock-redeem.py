@@ -22,6 +22,7 @@ ROOM = {
     "groupPassword": secrets.token_urlsafe(24),
     "lessonKey": base64.b64encode(secrets.token_bytes(32)).decode(),
     "title": "Demo lesson",
+    "userName": "Demo Student",
 }
 
 
