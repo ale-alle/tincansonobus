@@ -358,6 +358,12 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
     configLabel(mVersionLabel.get(), true);
     mVersionLabel->setJustificationType(Justification::centredRight);
 
+    // Tin Can: CanDuet is GPLv3 software based on SonoBus; keep this credit and source link visible
+    mCreditsLink = std::make_unique<HyperlinkButton>(TRANS("CanDuet by Tin Can Studios, based on SonoBus by Jesse Chappell (GPLv3) - source code"),
+                                                     URL("https://github.com/ale-alle/tincansonobus"));
+    mCreditsLink->setFont(Font(12), false, Justification::centredRight);
+    mCreditsLink->setTooltip(TRANS("Open the CanDuet source code"));
+
     addAndMakeVisible(mSettingsTab.get());
 
     mOptionsComponent->addAndMakeVisible(mOptionsAutosizeStaticLabel.get());
@@ -375,6 +381,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
     mOptionsComponent->addAndMakeVisible(mOptionsDefaultLevelSliderLabel.get());
     mOptionsComponent->addAndMakeVisible(mOptionsChangeAllFormatButton.get());
     mOptionsComponent->addAndMakeVisible(mVersionLabel.get());
+    mOptionsComponent->addAndMakeVisible(mCreditsLink.get());
     mOptionsComponent->addAndMakeVisible(mOptionsLanguageChoice.get());
     mOptionsComponent->addAndMakeVisible(mOptionsUnivFontButton.get());
     mOptionsComponent->addAndMakeVisible(mOptionsLanguageLabel.get());
@@ -390,7 +397,9 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
 
     if (JUCEApplicationBase::isStandaloneApp()) {
         mOptionsComponent->addAndMakeVisible(mOptionsOverrideSamplerateButton.get());
+#if TINCAN_SONOBUS_UPDATER
         mOptionsComponent->addAndMakeVisible(mOptionsShouldCheckForUpdateButton.get());
+#endif
         if (mOptionsAllowBluetoothInput) {
             mOptionsComponent->addAndMakeVisible(mOptionsAllowBluetoothInput.get());
         }
@@ -815,6 +824,7 @@ void OptionsView::updateLayout()
     optionsBox.flexDirection = FlexBox::Direction::column;
     optionsBox.items.add(FlexItem(4, 6));
     optionsBox.items.add(FlexItem(100, 15, *mVersionLabel).withMargin(2).withFlex(0));
+    optionsBox.items.add(FlexItem(100, 16, *mCreditsLink).withMargin(2).withFlex(0));
     optionsBox.items.add(FlexItem(4, 4));
     optionsBox.items.add(FlexItem(100, minitemheight, optionsLanguageBox).withMargin(2).withFlex(0));
     optionsBox.items.add(FlexItem(4, 4));
@@ -837,7 +847,9 @@ void OptionsView::updateLayout()
         if (mOptionsAllowBluetoothInput) {
             optionsBox.items.add(FlexItem(100, minpassheight, optionsAllowBluetoothBox).withMargin(2).withFlex(0));
         }
+#if TINCAN_SONOBUS_UPDATER
         optionsBox.items.add(FlexItem(100, minpassheight, optionsCheckForUpdateBox).withMargin(2).withFlex(0));
+#endif
     }
     optionsBox.items.add(FlexItem(100, minpassheight, optionsDisableShortcutsBox).withMargin(2).withFlex(0));
     optionsBox.items.add(FlexItem(100, minpassheight, optionsDynResampleBox).withMargin(2).withFlex(0));

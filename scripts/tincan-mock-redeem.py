@@ -3,7 +3,7 @@
 
     python scripts/tincan-mock-redeem.py            # listens on http://localhost:8788
     set TINCAN_API_BASE=http://localhost:8788       (PowerShell: $env:TINCAN_API_BASE="http://localhost:8788")
-    SonoBus.exe "tincan://join?ticket=demo-ok"
+    CanDuet.exe "canduet://join?ticket=demo-ok"
 
 Ticket "demo-ok" (any number of uses) returns a room on the connection server built into the
 standalone app (localhost:10999), with a lesson key that is fixed for this run so two app instances

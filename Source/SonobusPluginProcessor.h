@@ -33,6 +33,11 @@ class Metronome;
 
 #define MAX_PEERS 32
 #define MAX_CHANGROUPS 64
+// Tin Can: the inherited update checker points at sonobus.net, so it stays off until our own (T-025)
+#ifndef TINCAN_SONOBUS_UPDATER
+#define TINCAN_SONOBUS_UPDATER 0
+#endif
+
 // Tin Can: set TINCAN_SERVER_HOST / TINCAN_SERVER_PORT in CMake to use our own connection server (T-023)
 #ifdef TINCAN_SERVER_PORT
 #define DEFAULT_SERVER_PORT TINCAN_SERVER_PORT

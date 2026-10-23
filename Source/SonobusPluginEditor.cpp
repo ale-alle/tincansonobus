@@ -346,7 +346,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
         currConnectionInfo.userName = lastusername;
     }
 
-    mTitleLabel = std::make_unique<Label>("title", TRANS("SonoBus"));
+    mTitleLabel = std::make_unique<Label>("title", TRANS("CanDuet"));
     mTitleLabel->setFont(20);
     mTitleLabel->setAccessible(false);
     mTitleLabel->setColour(Label::textColourId, Colour(0xff47b0f8));
@@ -1362,7 +1362,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     
     startTimer(PeriodicUpdateTimerId, 1000);
 
-#if (JUCE_WINDOWS || JUCE_MAC)
+#if (JUCE_WINDOWS || JUCE_MAC) && TINCAN_SONOBUS_UPDATER
     if (JUCEApplicationBase::isStandaloneApp()) {
         startTimer(CheckForNewVersionTimerId, 5000);
     }
@@ -2213,7 +2213,7 @@ void SonobusAudioProcessorEditor::buttonClicked (Button* buttonThatWasClicked)
 #endif
             
             // create new timestamped filename
-            String filename = (currGroup.isEmpty() ? "SonoBusSession" : currGroup) + String("_") + Time::getCurrentTime().formatted("%Y-%m-%d_%H.%M.%S");
+            String filename = (currGroup.isEmpty() ? "CanDuetSession" : currGroup) + String("_") + Time::getCurrentTime().formatted("%Y-%m-%d_%H.%M.%S");
 
             filename = File::createLegalFileName(filename);
 
@@ -6033,8 +6033,10 @@ PopupMenu SonobusAudioProcessorEditor::SonobusMenuBarModel::getMenuForIndex (int
             retval.addSeparator();
             retval.addCommandItem (&parent.commandManager, SonobusCommands::SaveSetupFile);
 
+#if TINCAN_SONOBUS_UPDATER
             retval.addSeparator();
             retval.addCommandItem (&parent.commandManager, SonobusCommands::CheckForNewVersion);
+#endif
 
 #if (JUCE_WINDOWS || JUCE_LINUX)
             retval.addCommandItem (&parent.commandManager, SonobusCommands::ShowOptions);

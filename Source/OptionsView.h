@@ -125,6 +125,7 @@ protected:
     std::unique_ptr<ToggleButton> mOptionsUseSpecificUdpPortButton;
     std::unique_ptr<TextEditor>  mOptionsUdpPortEditor;
     std::unique_ptr<Label> mVersionLabel;
+    std::unique_ptr<HyperlinkButton> mCreditsLink; // Tin Can: GPL credit + source link
     std::unique_ptr<ToggleButton> mOptionsChangeAllFormatButton;
 
     std::unique_ptr<ToggleButton> mOptionsHearLatencyButton;

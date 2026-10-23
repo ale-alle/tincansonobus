@@ -83,9 +83,9 @@ public:
 
         options.applicationName     = getApplicationName();
         options.filenameSuffix      = ".settings";
-        options.osxLibrarySubFolder = "Application Support/SonoBus";
+        options.osxLibrarySubFolder = "Application Support/CanDuet";
        #if JUCE_LINUX
-        options.folderName          = "~/.config/sonobus";
+        options.folderName          = "~/.config/canduet";
        #else
         options.folderName          = "";
        #endif
@@ -114,7 +114,7 @@ public:
 
     const String getApplicationName() override              { return JucePlugin_Name; }
     const String getApplicationVersion() override           { return JucePlugin_VersionString; }
-    // Tin Can: one instance, so a tincan:// link clicked in the browser goes to the
+    // Tin Can: one instance, so a canduet:// link clicked in the browser goes to the
     // running app (anotherInstanceStarted). --multi-instance allows more for testing.
     bool moreThanOneInstanceAllowed() override              { return getCommandLineParameters().contains("--multi-instance"); }
 
@@ -733,7 +733,7 @@ public:
     
     void urlOpened(const URL & url) override {
         // never log join tickets
-        DBG("Url opened: " << (TinCan::isTinCanURL(url.toString(false)) ? String("tincan://(redacted)") : url.toString(true)));
+        DBG("Url opened: " << (TinCan::isTinCanURL(url.toString(false)) ? String("canduet://(redacted)") : url.toString(true)));
         
         if (mainWindow.get() != nullptr) {
             
@@ -750,7 +750,7 @@ public:
     
     void anotherInstanceStarted (const String& url) override    {
         
-        DBG("Url handled from another instance: " << (url.contains("tincan:") ? String("tincan://(redacted)") : url));
+        DBG("Url handled from another instance: " << (url.containsIgnoreCase(TinCan::JoinScheme) ? String("canduet://(redacted)") : url));
         
         if (mainWindow.get() != nullptr) {
             

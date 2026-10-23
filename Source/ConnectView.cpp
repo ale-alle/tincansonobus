@@ -86,7 +86,7 @@ publicGroupsListModel(this)
     mRemoteAddressStaticLabel = std::make_unique<Label>("remaddrst", TRANS("Host: "));
     mRemoteAddressStaticLabel->setJustificationType(Justification::centredRight);
 
-    mDirectConnectDescriptionLabel = std::make_unique<Label>("dirconndesc", TRANS("Connect directly to other instances of SonoBus on your local network with the local address that they advertise. This is experimental, using a private group is recommended instead, and works fine on local networks."));
+    mDirectConnectDescriptionLabel = std::make_unique<Label>("dirconndesc", TRANS("Connect directly to other instances of CanDuet on your local network with the local address that they advertise. This is experimental, using a private group is recommended instead, and works fine on local networks."));
     mDirectConnectDescriptionLabel->setJustificationType(Justification::topLeft);
 
     mAddRemoteHostEditor = std::make_unique<TextEditor>("remaddredit");
@@ -865,7 +865,7 @@ void ConnectView::publicGroupLogin()
 
 bool ConnectView::copyInfoToClipboard(bool singleURL, String * retmessage)
 {
-    String message = TRANS("Share this link with others to connect with SonoBus:") + " \n";
+    String message = TRANS("Share this link with others to connect with CanDuet:") + " \n";
 
     String hostport = mServerHostEditor->getText();
     if (hostport.isEmpty()) {

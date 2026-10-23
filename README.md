@@ -1,4 +1,15 @@
 
+# CanDuet
+
+**CanDuet** (by [Tin Can Studios](https://tincanstudios.ca)) is the app for live online music lessons: low-latency, encrypted audio between teacher and student, joined straight from a "Join lesson" link. Windows 10/11.
+
+CanDuet is a fork of [SonoBus](https://github.com/sonosaurus/sonobus) by Jesse Chappell and is free software under the GPLv3 (see `LICENSE` and `LICENSE_EXCEPTION`). The original SonoBus README follows below, unchanged except for this section.
+
+- Build on Windows: [BUILD-WINDOWS.md](BUILD-WINDOWS.md)
+- What CanDuet adds (join links, per-lesson encryption): [doc/TINCAN-CLIENT.md](doc/TINCAN-CLIENT.md)
+
+---
+
 # SonoBus
 
 SonoBus is an easy to use application for streaming high-quality, low-latency peer-to-peer audio between devices over the internet or a local network.

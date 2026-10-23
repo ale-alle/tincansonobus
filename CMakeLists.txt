@@ -167,12 +167,12 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         NEEDS_MIDI_INPUT TRUE
         NEEDS_MIDI_OUTPUT TRUE
         EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-        COMPANY_NAME "Sonosaurus"
-        BUNDLE_ID "com.Sonosaurus.SonoBus"
+        COMPANY_NAME "Tin Can Studios"
+        BUNDLE_ID "ca.tincanstudios.canduet"
         MICROPHONE_PERMISSION_ENABLED TRUE
         
-        ICON_BIG "images/sonobus_icon_mac_1024.png"
-        ICON_SMALL "images/sonobus_icon_mac_256.png"
+        ICON_BIG "images/canduet_icon_1024.png"
+        ICON_SMALL "images/canduet_icon_256.png"
         NEEDS_WEB_BROWSER FALSE
         VST2_CATEGORY "${vst2cat}"
         VST3_CATEGORIES "${vst3cats}"
@@ -191,7 +191,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         PLUGIN_MANUFACTURER_CODE Sono
         PLUGIN_CODE ${plugincode}
         FORMATS ${formats}
-        DESCRIPTION "SonoBus - Network Audio"
+        DESCRIPTION "CanDuet - music lessons"
         PRODUCT_NAME "${product_name}")
 
     juce_generate_juce_header("${target_name}")
@@ -646,7 +646,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
 endfunction()
 
 # most of the targets
-sono_add_custom_plugin_target(SonoBus SonoBus "${FormatsToBuild}" FALSE  "NBus")
+# Tin Can: product name CanDuet (T-024); the target stays "SonoBus" so build paths are unchanged
+sono_add_custom_plugin_target(SonoBus CanDuet "${FormatsToBuild}" FALSE  "NBus")
 
 # Mobile targets
 #sono_add_custom_plugin_target(SonoBusMobile "AUv3 Standalone" FALSE "NBus")

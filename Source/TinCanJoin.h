@@ -10,7 +10,7 @@
 
 // Tin Can lesson join (T-018 client side).
 //
-// The website's "Join lesson" button opens  tincan://join?ticket=<opaque>
+// The website's "Join lesson" button opens  canduet://join?ticket=<opaque>
 // The app redeems the ticket with the app server and joins the room without
 // ever showing or storing the group name, password or lesson key.
 //
@@ -34,10 +34,13 @@ struct JoinResult
     String getUserMessage() const;
 };
 
-// true if url uses the tincan:// scheme (whether or not it is valid)
+// the app's link scheme, "canduet:"
+extern const char * const JoinScheme;
+
+// true if url uses the canduet:// scheme (whether or not it is valid)
 bool isTinCanURL(const String & url);
 
-// extracts the ticket from tincan://join?ticket=...; false if malformed
+// extracts the ticket from canduet://join?ticket=...; false if malformed
 bool parseJoinURL(const String & url, String & ticketOut);
 
 // app server base URL: TINCAN_API_BASE build define, overridable in development

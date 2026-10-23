@@ -166,7 +166,7 @@ public:
 
     void handleURL(const String & urlstr);
 
-    // Tin Can: tincan://join?ticket=... from the website's Join lesson button
+    // Tin Can: canduet://join?ticket=... from the website's Join lesson button
     void handleTinCanURL(const String & urlstr);
     bool isInLessonRoom() const { return processor.hasLessonKey(); }
     String getDisplayGroupName() const { return mLessonTitle.isNotEmpty() ? mLessonTitle : TRANS("Lesson room"); }

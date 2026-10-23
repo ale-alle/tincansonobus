@@ -3,9 +3,9 @@
 What the fork adds on top of SonoBus 1.7.2. Project tasks and decisions live in the tincanstudios-site repo (`docs/TASKS.md`, `docs/DECISIONS.md`).
 
 ## Join links (T-018, client side)
-The website's **Join lesson** button opens `tincan://join?ticket=<opaque>`.
+The website's **Join lesson** button opens `canduet://join?ticket=<opaque>`.
 
-1. Windows starts `SonoBus.exe "tincan://join?ticket=…"` (registered by `release/wininstaller.iss`). If the app is already running, the link is handed to it — the app is now single-instance; `--multi-instance` turns that off for testing.
+1. Windows starts `CanDuet.exe "canduet://join?ticket=…"` (registered by `release/wininstaller.iss`). If the app is already running, the link is handed to it — the app is now single-instance; `--multi-instance` turns that off for testing.
 2. The app redeems the ticket with the app server and joins the room. Group name, password and lesson key are never shown, saved to "recents", or put into share links; the room appears as the lesson title (or "Lesson room").
 3. Errors show a short message pointing back to "My lessons". The ticket is never logged.
 

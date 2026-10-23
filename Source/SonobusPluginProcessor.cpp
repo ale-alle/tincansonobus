@@ -766,11 +766,11 @@ mState (*this, &mUndoManager, "SonoBusAoO",
     
     // use this to match our main app support dir
     PropertiesFile::Options options;
-    options.applicationName     = "SonoBus";
+    options.applicationName     = "CanDuet";
     options.filenameSuffix      = ".xml";
-    options.osxLibrarySubFolder = "Application Support/SonoBus";
+    options.osxLibrarySubFolder = "Application Support/CanDuet";
    #if JUCE_LINUX
-    options.folderName          = "~/.config/sonobus";
+    options.folderName          = "~/.config/canduet";
    #else
     options.folderName          = "";
    #endif
@@ -793,7 +793,7 @@ mState (*this, &mUndoManager, "SonoBusAoO",
     // LEAVE EMPTY by default
 #else
     auto parentDir = File::getSpecialLocation (File::userMusicDirectory);
-    parentDir = parentDir.getChildFile("SonoBus");
+    parentDir = parentDir.getChildFile("CanDuet");
     mDefaultRecordDir = URL(parentDir);
     mLastBrowseDir = mDefaultRecordDir.getLocalFile().getFullPathName();
 #endif

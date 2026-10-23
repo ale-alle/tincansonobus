@@ -9,6 +9,8 @@
 
 namespace TinCan {
 
+const char * const JoinScheme = "canduet:";
+
 String JoinResult::getUserMessage() const
 {
     switch (status) {
@@ -23,7 +25,7 @@ String JoinResult::getUserMessage() const
 
 bool isTinCanURL(const String & url)
 {
-    return url.trim().startsWithIgnoreCase("tincan:");
+    return url.trim().unquoted().startsWithIgnoreCase(JoinScheme);
 }
 
 static bool isTicketChar(juce_wchar c)
@@ -36,9 +38,10 @@ bool parseJoinURL(const String & urlstr, String & ticketOut)
     // Windows may hand us the URL wrapped in quotes
     String s = urlstr.trim().unquoted();
 
-    if (!s.startsWithIgnoreCase("tincan://join")) return false;
+    const String prefix = String(JoinScheme) + "//join";
+    if (!s.startsWithIgnoreCase(prefix)) return false;
 
-    String rest = s.substring(String("tincan://join").length());
+    String rest = s.substring(prefix.length());
     if (rest.startsWithChar('/')) rest = rest.substring(1);
     if (!rest.startsWithChar('?')) return false;
 
