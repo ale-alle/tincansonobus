@@ -8,11 +8,18 @@
 Ticket "demo-ok" (any number of uses) returns a room on the connection server built into the
 standalone app (localhost:10999), with a lesson key that is fixed for this run so two app instances
 land in the same encrypted room. Any other ticket gets 403. Tickets are never printed.
+
+Video (T-009): with MOCK_VIDEO_URL set (e.g. ws://localhost:7880 for `livekit-server --dev`), each
+redeem also returns {"video": {"url", "token"}}: a LiveKit access token for this run's room, signed
+with MOCK_VIDEO_KEY / MOCK_VIDEO_SECRET (defaults devkey / secret, the --dev credentials), camera only.
 """
 import base64
+import hashlib
+import hmac
 import json
 import os
 import secrets
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = int(os.environ.get("MOCK_PORT", "8788"))
@@ -24,6 +31,28 @@ ROOM = {
     "title": "Demo lesson",
     "userName": "Demo Student",
 }
+VIDEO_URL = os.environ.get("MOCK_VIDEO_URL", "")
+VIDEO_KEY = os.environ.get("MOCK_VIDEO_KEY", "devkey")
+VIDEO_SECRET = os.environ.get("MOCK_VIDEO_SECRET", "secret")
+VIDEO_ROOM = "lesson-" + secrets.token_hex(8)
+
+
+def b64url(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def video_token(identity, name, ttl=3600):
+    """LiveKit access token (HS256 JWT): join one room, publish camera only, no data channel."""
+    now = int(time.time())
+    header = {"alg": "HS256", "typ": "JWT"}
+    claims = {
+        "iss": VIDEO_KEY, "sub": identity, "name": name, "nbf": now - 10, "exp": now + ttl,
+        "video": {"room": VIDEO_ROOM, "roomJoin": True, "canPublish": True, "canSubscribe": True,
+                  "canPublishData": False, "canPublishSources": ["camera"]},
+    }
+    signing_input = b64url(json.dumps(header).encode()) + "." + b64url(json.dumps(claims).encode())
+    sig = hmac.new(VIDEO_SECRET.encode(), signing_input.encode(), hashlib.sha256).digest()
+    return signing_input + "." + b64url(sig)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -36,7 +65,12 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             return self.reply(400, {"error": "bad_request"})
         if ticket == "demo-ok":
-            return self.reply(200, ROOM)
+            body = dict(ROOM)
+            if VIDEO_URL:
+                # a new identity per redeem so two app instances are two participants
+                body["video"] = {"url": VIDEO_URL,
+                                 "token": video_token("p-" + secrets.token_hex(6), ROOM["userName"])}
+            return self.reply(200, body)
         return self.reply(403, {"error": "ticket_rejected"})
 
     def reply(self, status, body):

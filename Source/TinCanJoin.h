@@ -5,6 +5,7 @@
 
 #include "JuceHeader.h"
 #include "SonobusPluginProcessor.h"
+#include "TinCanVideo.h"
 
 #include <functional>
 
@@ -17,7 +18,8 @@
 //   POST {apiBase}/api/rooms/redeem        Content-Type: application/json
 //   {"ticket": "<ticket>"}
 //   200 -> {"server": "host[:port]", "group": "...", "groupPassword": "...",
-//           "lessonKey": "<base64 32 bytes>", "title": "Piano with Sam"}   (title optional)
+//           "lessonKey": "<base64 32 bytes>", "title": "Piano with Sam",     (title optional)
+//           "video": {"url": "wss://...", "token": "..."}}                 (video optional, T-009)
 //   4xx -> ticket expired, already used or not for this user
 //
 // The ticket is never written to logs or shown in the UI.
@@ -30,6 +32,7 @@ struct JoinResult
     Status status = InvalidLink;
     AooServerConnectionInfo info;
     String title;
+    VideoInfo video;  // empty when the lesson has no video (or the server sent none)
 
     String getUserMessage() const;
 };

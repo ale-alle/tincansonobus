@@ -20,6 +20,35 @@ if (NOT "${TINCAN_SERVER_PORT}" STREQUAL "")
     list(APPEND TINCAN_SERVER_DEFS TINCAN_SERVER_PORT=${TINCAN_SERVER_PORT})
 endif()
 
+# In-lesson video (T-009, doc/TINCAN-VIDEO.md): on Windows the video page runs in Microsoft Edge WebView2.
+# The WebView2 SDK (headers + WebView2Loader.dll) is downloaded from nuget.org at configure time, hash-checked.
+option(TINCAN_VIDEO "In-lesson video window (Windows, WebView2)" ON)
+set(TINCAN_VIDEO_PAGE "" CACHE STRING "Video page URL (empty: <TINCAN_API_BASE>/app/video/)")
+set(TINCAN_WEBVIEW2_VERSION "1.0.2903.40")
+set(TINCAN_WEBVIEW2_SHA256 "ef128016dd1e51c59178c827ed5b8aa3322c57afa8675d930f8109505542ad74")
+set(TINCAN_VIDEO_DEFS JUCE_WEB_BROWSER=0)
+if (WIN32 AND TINCAN_VIDEO)
+    set(TINCAN_WEBVIEW2_DIR "${CMAKE_BINARY_DIR}/webview2-${TINCAN_WEBVIEW2_VERSION}")
+    if (NOT EXISTS "${TINCAN_WEBVIEW2_DIR}/build/native/include/WebView2.h")
+        file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/${TINCAN_WEBVIEW2_VERSION}"
+            "${CMAKE_BINARY_DIR}/webview2-${TINCAN_WEBVIEW2_VERSION}.nupkg"
+            EXPECTED_HASH SHA256=${TINCAN_WEBVIEW2_SHA256}
+            TLS_VERIFY ON)
+        file(MAKE_DIRECTORY "${TINCAN_WEBVIEW2_DIR}")
+        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xf "${CMAKE_BINARY_DIR}/webview2-${TINCAN_WEBVIEW2_VERSION}.nupkg"
+            WORKING_DIRECTORY "${TINCAN_WEBVIEW2_DIR}")
+    endif()
+    if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+        set(TINCAN_WEBVIEW2_LOADER "${TINCAN_WEBVIEW2_DIR}/build/native/x86/WebView2Loader.dll")
+    else()
+        set(TINCAN_WEBVIEW2_LOADER "${TINCAN_WEBVIEW2_DIR}/build/native/x64/WebView2Loader.dll")
+    endif()
+    set(TINCAN_VIDEO_DEFS JUCE_WEB_BROWSER=1 JUCE_USE_WIN_WEBVIEW2=1)
+    if (NOT "${TINCAN_VIDEO_PAGE}" STREQUAL "")
+        list(APPEND TINCAN_VIDEO_DEFS TINCAN_VIDEO_PAGE="${TINCAN_VIDEO_PAGE}")
+    endif()
+endif()
+
 
 if (WIN32)
     #set (CMAKE_GENERATOR_TOOLSET ClangCL)
@@ -222,6 +251,9 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsMac.mm)
     elseif (WIN32)
         list (APPEND HEADER_INCLUDES deps/windows ../asiosdk/common)
+        if (TINCAN_WEBVIEW2_DIR)
+            list (APPEND HEADER_INCLUDES "${TINCAN_WEBVIEW2_DIR}/build/native/include")
+        endif()
         list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsWindows.cpp)
 
 	message (STATUS "Win generator platform is: ${CMAKE_VS_PLATFORM_NAME}" )
@@ -340,6 +372,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanJoin.h
         Source/TinCanPacketCipher.cpp
         Source/TinCanPacketCipher.h
+        Source/TinCanVideo.cpp
+        Source/TinCanVideo.h
         Source/VDONinjaView.h
         Source/VersionInfo.cpp
         Source/VersionInfo.h
@@ -461,7 +495,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
     
     target_compile_definitions("${target_name}"
         PUBLIC
-        JUCE_WEB_BROWSER=0
+        ${TINCAN_VIDEO_DEFS}
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0
@@ -642,6 +676,12 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
             juce::juce_recommended_lto_flags
         #   juce::juce_recommended_warning_flags
         )
+
+    # the video window loads WebView2Loader.dll from next to the exe
+    if (TINCAN_WEBVIEW2_LOADER AND TARGET ${target_name}_Standalone)
+        add_custom_command(TARGET ${target_name}_Standalone POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${TINCAN_WEBVIEW2_LOADER}" "$<TARGET_FILE_DIR:${target_name}_Standalone>")
+    endif()
             
 endfunction()
 

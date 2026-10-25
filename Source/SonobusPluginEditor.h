@@ -168,6 +168,7 @@ public:
 
     // Tin Can: canduet://join?ticket=... from the website's Join lesson button
     void handleTinCanURL(const String & urlstr);
+    void closeLessonVideo();
     bool isInLessonRoom() const { return processor.hasLessonKey(); }
     String getDisplayGroupName() const { return mLessonTitle.isNotEmpty() ? mLessonTitle : TRANS("Lesson room"); }
 
@@ -563,6 +564,7 @@ private:
     AooServerConnectionInfo currConnectionInfo;
 
     std::unique_ptr<TinCan::TicketRedeemer> mTicketRedeemer;
+    std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
     String mLessonTitle;
 
     std::unique_ptr<TableListBox> mRemoteSinkListBox;

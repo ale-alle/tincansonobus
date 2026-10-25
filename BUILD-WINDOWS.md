@@ -73,6 +73,17 @@ $env:TINCAN_API_BASE = "http://localhost:8788" # terminal 2
 ```
 Both join "Demo lesson" and connect; room name, password and share-link button are hidden. `ticket=wrong` shows "Can't join lesson".
 
+**Video** (T-009, [doc/TINCAN-VIDEO.md](doc/TINCAN-VIDEO.md)) — needs a local LiveKit server (`livekit-server.exe` from github.com/livekit/livekit/releases) and the video page:
+```powershell
+livekit-server.exe --dev --bind 127.0.0.1                          # terminal 1 (key devkey / secret secret)
+python -m http.server 8790 --bind 127.0.0.1 --directory video-page # terminal 2
+$env:MOCK_VIDEO_URL = "ws://localhost:7880"; python scripts\tincan-mock-redeem.py   # terminal 3
+$env:TINCAN_API_BASE = "http://localhost:8788"                     # terminal 4
+$env:TINCAN_VIDEO_PAGE = "http://localhost:8790/"
+& $exe --multi-instance "canduet://join?ticket=demo-ok"            # run twice
+```
+Each copy opens a "Demo lesson - Video" window; allow the camera when asked. With one webcam, the second copy usually can't open it and says so; its window still shows the first copy's video. Closing the video window keeps the audio going; leaving the lesson closes it.
+
 ## 4. Smoke test
 1. Run `CanDuet.exe`; pick your audio interface with the **ASIO** driver type; buffer 128 or 256 samples.
 2. Run a second copy on another PC (or a phone with SonoBus) and join the same private group with a password via the default server.
@@ -93,3 +104,4 @@ Both join "Demo lesson" and connect; room name, password and share-link button a
 | Date | Windows | VS / toolset | Result | Notes |
 |---|---|---|---|---|
 | 2026-10-22 | Windows 11 Home 26200 | VS 2022 Community, MSVC 14.44 (v143), CMake 4.0.2, ASIO SDK 2.3.3 | ✅ Release x64 | Unmodified fork, then with Tin Can changes. `--version` → 1.7.2. Needed the CMake policy flag. ~540 warnings, all upstream. TinCanTests pass; §3b tests pass (same key connects, different keys don't, join link OK, bad ticket → error) |
+| 2026-10-25 | Windows 11 Home 26200 | same | ✅ Release x64 | Branch `t-009-video`: WebView2 SDK 1.0.2903.40 fetched by CMake, `WebView2Loader.dll` copied next to the exe. Video test (§3b) with fake cameras: both copies open the video window and receive each other's video; token removed from the page address |

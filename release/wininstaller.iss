@@ -28,6 +28,7 @@ DisableDirPage=no
 
 [Files]
 Source: "CanDuet\CanDuet.exe"; DestDir: "{app}"; Flags: ignoreversion signonce
+Source: "CanDuet\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "gpl-3.0.txt"; DestDir: "{app}"; DestName: "LICENSE.txt"
 
 [Icons]

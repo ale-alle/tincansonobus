@@ -26,6 +26,9 @@ Content-Type: application/json
 - The server should issue the **same** `group`, `groupPassword` and `lessonKey` to every participant of a lesson and a fresh set per lesson.
 - Not built yet: sign-in inside the app, "My lessons", the waiting-room screen and auto-reconnect UI (ARCHITECTURE "Client changes in the fork").
 
+## In-lesson video (T-009)
+The redeem reply may include `"video": {"url", "token"}`; the app then opens a video window (WebView2) showing the website's video page connected to our LiveKit server. Audio is unchanged. Design, contract and test status: [TINCAN-VIDEO.md](TINCAN-VIDEO.md).
+
 ## Per-lesson encryption (D-009 phase 1)
 With a lesson key set, every UDP packet between participants is sealed with XChaCha20-Poly1305 (Monocypher 4.0.2, vendored in `deps/monocypher`, BSD-2/CC0):
 

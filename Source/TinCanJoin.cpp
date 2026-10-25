@@ -122,6 +122,8 @@ JoinResult parseRedeemResponse(int httpStatus, const String & body)
     result.title = json.getProperty("title", var()).toString().trim().substring(0, 80);
     // name shown to the other participant (the child's name when a parent joins); optional
     result.info.userName = json.getProperty("userName", var()).toString().trim().substring(0, 80);
+    // video is optional: a missing or malformed "video" never blocks joining the audio room
+    result.video = parseVideoInfo(json);
     result.status = JoinResult::Ok;
     return result;
 }

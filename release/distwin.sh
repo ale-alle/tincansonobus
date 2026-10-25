@@ -22,6 +22,8 @@ rm -rf CanDuet
 mkdir -p CanDuet
 
 cp -v ${BUILDDIR}/Standalone/CanDuet.exe CanDuet/ || exit 3
+# video window (T-009) needs the WebView2 loader next to the exe
+cp -v ${BUILDDIR}/Standalone/WebView2Loader.dll CanDuet/ || exit 3
 
 mkdir -p instoutput
 rm -f instoutput/*

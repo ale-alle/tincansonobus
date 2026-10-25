@@ -2856,7 +2856,20 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
 
         safeThis->mLessonTitle = result.title;
         safeThis->connectWithInfo(info);
+
+        // video runs beside the audio room; it never holds up or changes the audio join
+        safeThis->closeLessonVideo();
+        if (result.video.isValid() && TinCan::isVideoBuild()) {
+            safeThis->mVideoWindow = std::make_unique<TinCan::VideoWindow>(result.title, result.video, info.userName, [safeThis]() {
+                if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
+            });
+        }
     });
+}
+
+void SonobusAudioProcessorEditor::closeLessonVideo()
+{
+    mVideoWindow.reset();
 }
 
 void SonobusAudioProcessorEditor::handleURL(const String & urlstr)
@@ -3999,6 +4012,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
             updateState();
         }
         else if (ev.type == ClientEvent::DisconnectEvent) {
+            closeLessonVideo();
             String statstr;
             if (ev.success) {
                 statstr = TRANS("Disconnected from server");
@@ -4061,6 +4075,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
         else if (ev.type == ClientEvent::GroupLeaveEvent) {
             String statstr;
             if (ev.success) {
+                closeLessonVideo();
                 statstr = isInLessonRoom() ? TRANS("Left lesson: ") + getDisplayGroupName() : TRANS("Left Group: ") + ev.group;
             } else {
                 statstr = TRANS("Failed to leave group: ") + ev.message;

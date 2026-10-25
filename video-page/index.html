@@ -1,0 +1,197 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPLv3-or-later WITH Appstore-exception
+     Copyright (C) 2026 Tin Can Studios
+
+     CanDuet in-lesson video (T-009). Shown inside the app's video window (WebView2).
+     The app opens  <this page>#url=<wss://…>&token=<LiveKit JWT>&name=<display name>
+     The fragment never reaches a server; the page removes it from the address as soon as it loads.
+     Video only: the microphone is never requested. Lesson audio stays on CanDuet's low-latency path. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>CanDuet video</title>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.1/dist/livekit-client.umd.js"
+        integrity="sha384-ejH14wPQkwwyImo2LYdigxCruyGOymTSDatUhlPFHPulPcrMglpJOjRVTMYqZYqQ"
+        crossorigin="anonymous"></script>
+<style>
+  :root { --bg: #111317; --panel: #1c1f26; --text: #eef0f4; --muted: #9aa3b2; --accent: #f2a541; --danger: #e5645a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 14px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #stage { position: absolute; inset: 0 0 52px 0; display: grid; place-items: center; }
+  #remote { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #self { position: absolute; right: 12px; bottom: 64px; width: 24%; max-width: 280px; min-width: 120px;
+          aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 2px solid var(--panel);
+          background: #000; transform: scaleX(-1); }
+  #self.unmirrored { transform: none; }
+  #self[hidden], #remote[hidden] { display: none; }
+  #status { position: absolute; inset: 0 0 52px 0; display: grid; place-items: center; text-align: center;
+            padding: 16px; color: var(--muted); font-size: 16px; pointer-events: none; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; display: flex; gap: 8px;
+         align-items: center; padding: 0 12px; background: var(--panel); }
+  button, select { font: inherit; color: var(--text); background: #2a2f39; border: 1px solid #3a404c;
+                   border-radius: 6px; padding: 6px 12px; min-height: 34px; }
+  button:hover, select:hover { border-color: var(--muted); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed="false"] { border-color: var(--danger); }
+  select { max-width: 40%; }
+  .spacer { flex: 1; }
+  #who { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<main id="stage" aria-label="Lesson video">
+  <video id="remote" autoplay playsinline muted hidden></video>
+  <video id="self" autoplay playsinline muted hidden aria-label="Your camera"></video>
+</main>
+<div id="status" role="status" aria-live="polite">Starting video…</div>
+<div id="bar">
+  <button id="cam" type="button" aria-pressed="true">Camera on</button>
+  <select id="camera" aria-label="Camera"></select>
+  <button id="mirror" type="button" aria-pressed="true" title="Flip your own preview (others always see you the right way round)">Mirror me</button>
+  <span class="spacer"></span>
+  <span id="who"></span>
+</div>
+<script>
+"use strict";
+(function () {
+  const LK = window.LivekitClient;
+  const $ = (id) => document.getElementById(id);
+  const remoteEl = $("remote"), selfEl = $("self"), statusEl = $("status");
+
+  // read and immediately forget the connection details
+  const params = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, "", location.pathname + location.search);
+  const sfuUrl = params.get("url") || "";
+  const token = params.get("token") || "";
+  const myName = (params.get("name") || "").slice(0, 80);
+
+  // small read-only state for support and automated checks
+  const state = window.canduetVideo = { phase: "starting", remoteName: "", remoteVideo: false, localVideo: false, error: "" };
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+    statusEl.hidden = !text;
+  }
+  function fail(phase, text) {
+    state.phase = phase; state.error = text;
+    setStatus(text);
+  }
+
+  if (!LK) return fail("error", "Video couldn't load. Check your internet connection, then close and reopen the video window.");
+  if (!/^wss:\/\//.test(sfuUrl) && !/^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(sfuUrl) || !token) {
+    return fail("error", "This video link isn't complete. Leave the lesson and press Join again in My lessons.");
+  }
+
+  const room = new LK.Room({
+    adaptiveStream: true,
+    dynacast: true,
+    videoCaptureDefaults: { resolution: LK.VideoPresets.h720.resolution },
+    publishDefaults: { simulcast: true, videoCodec: "vp8" },
+  });
+
+  function showRemote() {
+    let found = null;
+    room.remoteParticipants.forEach((p) => {
+      p.trackPublications.forEach((pub) => {
+        if (!found && pub.kind === "video" && pub.track && !pub.isMuted) found = { p, track: pub.track };
+      });
+    });
+    if (found) {
+      found.track.attach(remoteEl);
+      remoteEl.hidden = false;
+      state.remoteVideo = true;
+      state.remoteName = found.p.name || "";
+      $("who").textContent = found.p.name ? "With " + found.p.name : "";
+      setStatus("");
+    } else {
+      remoteEl.hidden = true;
+      state.remoteVideo = false;
+      const others = room.remoteParticipants.size;
+      setStatus(others ? "The other person's camera is off." : "Waiting for the other person to turn on video…");
+    }
+  }
+
+  async function startCamera(deviceId) {
+    try {
+      await room.localParticipant.setCameraEnabled(true, deviceId ? { deviceId } : undefined);
+      const pub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+      if (pub && pub.track) { pub.track.attach(selfEl); selfEl.hidden = false; state.localVideo = true; }
+      $("cam").textContent = "Camera on"; $("cam").setAttribute("aria-pressed", "true");
+      await listCameras();
+    } catch (e) {
+      state.localVideo = false;
+      selfEl.hidden = true;
+      $("cam").textContent = "Camera off"; $("cam").setAttribute("aria-pressed", "false");
+      setStatus(e && e.name === "NotAllowedError"
+        ? "CanDuet isn't allowed to use your camera. Allow it in the prompt or in Windows Settings › Privacy › Camera."
+        : "Your camera couldn't start. Close other apps that use it, or pick another camera below.");
+    }
+  }
+
+  async function listCameras() {
+    const sel = $("camera");
+    const cams = await LK.Room.getLocalDevices("videoinput", false);
+    const active = room.getActiveDevice("videoinput");
+    sel.replaceChildren(...cams.map((c, i) => {
+      const o = document.createElement("option");
+      o.value = c.deviceId; o.textContent = c.label || "Camera " + (i + 1);
+      o.selected = c.deviceId === active;
+      return o;
+    }));
+    sel.hidden = cams.length < 2;
+  }
+
+  $("camera").addEventListener("change", (e) => {
+    try { localStorage.setItem("canduet.camera", e.target.value); } catch (_) {}
+    room.switchActiveDevice("videoinput", e.target.value).catch(() => {});
+  });
+  $("cam").addEventListener("click", async () => {
+    const on = $("cam").getAttribute("aria-pressed") === "true";
+    if (on) {
+      await room.localParticipant.setCameraEnabled(false);
+      selfEl.hidden = true; state.localVideo = false;
+      $("cam").textContent = "Camera off"; $("cam").setAttribute("aria-pressed", "false");
+    } else {
+      await startCamera(room.getActiveDevice("videoinput"));
+    }
+  });
+  $("mirror").addEventListener("click", () => {
+    const on = $("mirror").getAttribute("aria-pressed") !== "true";
+    $("mirror").setAttribute("aria-pressed", String(on));
+    selfEl.classList.toggle("unmirrored", !on);
+    try { localStorage.setItem("canduet.mirror", on ? "1" : "0"); } catch (_) {}
+  });
+  try {
+    if (localStorage.getItem("canduet.mirror") === "0") $("mirror").click();
+  } catch (_) {}
+
+  room
+    .on(LK.RoomEvent.TrackSubscribed, showRemote)
+    .on(LK.RoomEvent.TrackUnsubscribed, showRemote)
+    .on(LK.RoomEvent.TrackMuted, showRemote)
+    .on(LK.RoomEvent.TrackUnmuted, showRemote)
+    .on(LK.RoomEvent.ParticipantConnected, showRemote)
+    .on(LK.RoomEvent.ParticipantDisconnected, showRemote)
+    .on(LK.RoomEvent.Reconnecting, () => { state.phase = "reconnecting"; setStatus("Video connection lost. Reconnecting…"); })
+    .on(LK.RoomEvent.Reconnected, () => { state.phase = "connected"; showRemote(); })
+    .on(LK.RoomEvent.Disconnected, () => { if (state.phase !== "error") fail("ended", "Video has ended. Your lesson audio is not affected."); });
+
+  setStatus("Connecting video…");
+  room.connect(sfuUrl, token)
+    .then(async () => {
+      state.phase = "connected";
+      showRemote();
+      let saved = null;
+      try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
+      await startCamera(saved || undefined);
+    })
+    .catch(() => fail("error", "Video couldn't connect. Your lesson audio still works. Leave and rejoin the lesson to try again."));
+
+  window.addEventListener("pagehide", () => room.disconnect());
+})();
+</script>
+</body>
+</html>
