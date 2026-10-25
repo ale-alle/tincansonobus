@@ -49,6 +49,7 @@ nonce = 16 random bytes per key (OS CSPRNG) + 64-bit counter
 
 ## Connection server (T-023, client side)
 `TINCAN_SERVER_HOST` / `TINCAN_SERVER_PORT` CMake options set the default server. Empty keeps `aoo.sonobus.net:10998` until our server exists.
+For testing between two homes, a throwaway Toronto server (stock aooserver + LiveKit) is described in [TINCAN-VPS.md](TINCAN-VPS.md).
 
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.

@@ -93,7 +93,7 @@ Token claims, signed with the LiveKit API secret (a Worker secret; the client ne
 2. **Real lessons.**
    - rooms-worker issues `video` tokens.
    - Host the page on the site, with a Content-Security-Policy for that path.
-   - LiveKit on the Toronto VPS with TLS.
+   - LiveKit on the Toronto VPS with TLS (test server script and steps: [TINCAN-VPS.md](TINCAN-VPS.md)).
    - Owner test on two PCs; measure glass-to-glass latency and bandwidth.
 3. **Polish.**
    - Dock the video inside the main window (option) and remember the window size and position.

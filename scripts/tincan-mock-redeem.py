@@ -12,6 +12,9 @@ land in the same encrypted room. Any other ticket gets 403. Tickets are never pr
 Video (T-009): with MOCK_VIDEO_URL set (e.g. ws://localhost:7880 for `livekit-server --dev`), each
 redeem also returns {"video": {"url", "token"}}: a LiveKit access token for this run's room, signed
 with MOCK_VIDEO_KEY / MOCK_VIDEO_SECRET (defaults devkey / secret, the --dev credentials), camera only.
+
+Two PCs (test server, doc/TINCAN-VPS.md): set the same MOCK_ROOM_SEED on both so their mocks hand
+out the same room and lesson key; MOCK_USER_NAME sets the name the other person sees.
 """
 import base64
 import hashlib
@@ -23,18 +26,28 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = int(os.environ.get("MOCK_PORT", "8788"))
+ROOM_SEED = os.environ.get("MOCK_ROOM_SEED", "")
+
+
+def room_bytes(label, n):
+    """Random bytes for this run, or derived from MOCK_ROOM_SEED so two PCs land in the same room."""
+    if not ROOM_SEED:
+        return secrets.token_bytes(n)
+    return hmac.new(ROOM_SEED.encode(), label.encode(), hashlib.sha256).digest()[:n]
+
+
 ROOM = {
     "server": os.environ.get("MOCK_SERVER", "localhost:10999"),
-    "group": "lesson-" + secrets.token_hex(8),
-    "groupPassword": secrets.token_urlsafe(24),
-    "lessonKey": base64.b64encode(secrets.token_bytes(32)).decode(),
+    "group": "lesson-" + room_bytes("group", 8).hex(),
+    "groupPassword": base64.urlsafe_b64encode(room_bytes("password", 24)).decode(),
+    "lessonKey": base64.b64encode(room_bytes("lesson-key", 32)).decode(),
     "title": "Demo lesson",
-    "userName": "Demo Student",
+    "userName": os.environ.get("MOCK_USER_NAME", "Demo Student"),
 }
 VIDEO_URL = os.environ.get("MOCK_VIDEO_URL", "")
 VIDEO_KEY = os.environ.get("MOCK_VIDEO_KEY", "devkey")
 VIDEO_SECRET = os.environ.get("MOCK_VIDEO_SECRET", "secret")
-VIDEO_ROOM = "lesson-" + secrets.token_hex(8)
+VIDEO_ROOM = "lesson-" + room_bytes("video-room", 8).hex()
 
 
 def b64url(data):
