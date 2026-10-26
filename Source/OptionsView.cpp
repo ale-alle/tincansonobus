@@ -479,7 +479,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
             mAudioDeviceSelector = std::make_unique<AudioDeviceSelectorComponent>(*getAudioDeviceManager(),
                                                                                   minNumInputs, maxNumInputs,
                                                                                   minNumOutputs, maxNumOutputs,
-                                                                                  false, // show MIDI input
+                                                                                  true, // show MIDI input (Tin Can teaching tools, T-034)
                                                                                   false,
                                                                                   false, false);
 

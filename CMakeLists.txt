@@ -370,8 +370,12 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/SuggestNewGroupView.h
         Source/TinCanJoin.cpp
         Source/TinCanJoin.h
+        Source/TinCanNotes.cpp
+        Source/TinCanNotes.h
         Source/TinCanPacketCipher.cpp
         Source/TinCanPacketCipher.h
+        Source/TinCanTools.cpp
+        Source/TinCanTools.h
         Source/TinCanVideo.cpp
         Source/TinCanVideo.h
         Source/VDONinjaView.h
@@ -697,6 +701,9 @@ sono_add_custom_plugin_target(SonoBusInst "SonoBusInstrument" "VST3" TRUE  "IBus
 
 # Tin Can unit tests (no JUCE): cmake --build build --target TinCanTests --config Release
 add_executable(TinCanTests EXCLUDE_FROM_ALL
+    tests/TinCanTestMain.cpp
     tests/TinCanPacketCipherTest.cpp
+    tests/TinCanNotesTest.cpp
     Source/TinCanPacketCipher.cpp
+    Source/TinCanNotes.cpp
     deps/monocypher/monocypher.c)

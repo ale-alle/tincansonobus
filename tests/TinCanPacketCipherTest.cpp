@@ -1,25 +1,21 @@
 // SPDX-License-Identifier: GPLv3-or-later WITH Appstore-exception
 // Copyright (C) 2026 Tin Can Studios
 
+#include "TinCanTest.h"
 #include "../Source/TinCanPacketCipher.h"
 
-#include <cstdio>
 #include <cstring>
 #include <set>
 #include <string>
 
 using TinCan::PacketCipher;
 
-static int failures = 0;
-
-#define CHECK(cond) do { if (!(cond)) { std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); ++failures; } } while (0)
-
 static void makeKey(uint8_t * key, uint8_t seed)
 {
     for (int i = 0; i < PacketCipher::KeySize; ++i) key[i] = (uint8_t) (seed + i);
 }
 
-int main()
+void runPacketCipherTests()
 {
     uint8_t keyA[32], keyB[32];
     makeKey(keyA, 1);
@@ -142,11 +138,4 @@ int main()
         CHECK(!PacketCipher::decodeKey("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAh", out)); // 33 bytes
         CHECK(!PacketCipher::decodeKey("not base64 at all!!", out));
     }
-
-    if (failures == 0) {
-        std::printf("TinCanPacketCipherTest: all checks passed\n");
-        return 0;
-    }
-    std::printf("TinCanPacketCipherTest: %d failure(s)\n", failures);
-    return 1;
 }

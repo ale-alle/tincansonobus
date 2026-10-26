@@ -752,6 +752,11 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     mPatchbayButton->setButtonText(TRANS("Patchbay"));
     mPatchbayButton->addListener(this);
 
+    mToolsButton = std::make_unique<TextButton>("tools");
+    mToolsButton->setButtonText(TRANS("Tools"));
+    mToolsButton->setTooltip(TRANS("Teaching tools: on-screen keyboard showing the notes played"));
+    mToolsButton->onClick = [this]() { showToolsWindow(mToolsWindow == nullptr); };
+
     mSetupAudioButton = std::make_unique<SonoTextButton>("directconnect");
     mSetupAudioButton->setButtonText(TRANS("Setup Audio"));
     mSetupAudioButton->addListener(this);
@@ -1179,6 +1184,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     //addAndMakeVisible(mMonDelayButton.get());
 
     mTopLevelContainer->addAndMakeVisible(mPatchbayButton.get());
+    mTopLevelContainer->addAndMakeVisible(mToolsButton.get());
     mTopLevelContainer->addAndMakeVisible (mSettingsButton.get());
     mTopLevelContainer->addAndMakeVisible(mConnectButton.get());
     mTopLevelContainer->addChildComponent(mAltConnectButton.get());
@@ -2864,6 +2870,23 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
                 if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
             });
         }
+    });
+}
+
+void SonobusAudioProcessorEditor::showToolsWindow(bool show)
+{
+    if (!show) {
+        mToolsWindow.reset();
+        return;
+    }
+    if (mToolsWindow) {
+        mToolsWindow->toFront(true);
+        return;
+    }
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    mToolsWindow = std::make_unique<TinCan::ToolsWindow>(processor, getAudioDeviceManager, [safeThis]() {
+        // closing destroys the window, which stops the MIDI copy; do it after the click returns
+        if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->showToolsWindow(false); });
     });
 }
 
@@ -5035,6 +5058,8 @@ void SonobusAudioProcessorEditor::updateLayout()
     toolbarBox.items.add(FlexItem(2, 6).withMargin(0).withFlex(0.1));
     toolbarBox.items.add(FlexItem(toolwidth, minitemheight, *mMetEnableButton).withMargin(0).withFlex(0).withMaxHeight(minitemheight+2).withAlignSelf(FlexItem::AlignSelf::center));
     toolbarBox.items.add(FlexItem(36, minitemheight, *mMetConfigButton).withMargin(0).withFlex(0).withMaxHeight(minitemheight+2).withAlignSelf(FlexItem::AlignSelf::center));
+    toolbarBox.items.add(FlexItem(4, 5).withMargin(0).withFlex(0.1));
+    toolbarBox.items.add(FlexItem(52, minitemheight, *mToolsButton).withMargin(2).withFlex(0));
     toolbarBox.items.add(FlexItem(2, 5).withMargin(0).withFlex(0.1));
 
    

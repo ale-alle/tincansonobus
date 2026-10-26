@@ -39,7 +39,7 @@ nonce = 16 random bytes per key (OS CSPRNG) + 64-bit counter
 - Covers audio, peer handshakes/pings and SonoBus peer messages (chat, peer info) — everything except traffic to the connection server (`/aoo/server/*` out, `/aoo/client/*` in), which stays plaintext because the server holds no key.
 - While a key is set, unsealed peer packets and packets that fail authentication are dropped (`getDroppedCipherPacketCount()`). No plaintext fallback.
 - Code: `Source/TinCanPacketCipher.{h,cpp}`; hooks in `endpoint_send`, `client_send` and `doReceiveData` in `Source/SonobusPluginProcessor.cpp`.
-- Tests: `TinCanTests` target (`tests/TinCanPacketCipherTest.cpp`).
+- Tests: `TinCanTests` target (`tests/TinCanPacketCipherTest.cpp`; all Tin Can tests run from `tests/TinCanTestMain.cpp`).
 
 ### Known limits — review before real students (backend-security + qa-reviewer)
 - **No replay protection.** A captured packet can be re-sent; AOO's sequence numbers discard most audio duplicates, but control messages are not checked. Fix: per-sender sliding window on the nonce counter.
@@ -50,6 +50,18 @@ nonce = 16 random bytes per key (OS CSPRNG) + 64-bit counter
 ## Connection server (T-023, client side)
 `TINCAN_SERVER_HOST` / `TINCAN_SERVER_PORT` CMake options set the default server. Empty keeps `aoo.sonobus.net:10998` until our server exists.
 For testing between two homes, a throwaway Toronto server (stock aooserver + LiveKit) is described in [TINCAN-VPS.md](TINCAN-VPS.md).
+
+## Teaching tools (T-034 onwards)
+**Tools** in the bottom toolbar (next to the metronome) opens the *Teaching tools* window; click again or close it to put it away. A separate window so the lesson controls stay visible. Spec: `.claude/worktrees/asiosdk/CanDuet_Features.md`; tasks T-034–T-038 in the site repo.
+
+### On-screen instrument (T-034)
+- Piano keyboard showing notes from the MIDI input (blue) and notes clicked with the mouse (orange); notes kept sounding only by the sustain pedal are pale. 25/37/49/61/88 keys, octave buttons, note names on C only or every key, sharps or flats, middle C = C4 or C3. Note names are concert pitch.
+- **MIDI input:** Settings > Audio now lists *Active MIDI inputs* (the standard JUCE list, saved with the audio settings; it was hidden in SonoBus). MIDI from another program needs a loopback port (e.g. loopMIDI, or the Windows MIDI Services loopback) turned on in that list.
+- **Threads:** `processBlock` copies note-on/off, sustain (CC 64), all-sound-off (CC 120), reset-controllers (CC 121) and all-notes-off (CC 123) into a fixed 1024-entry lock-free queue — no allocation, no locks, and only while the window is open. The window drains it 30 times a second on the message thread and repaints only when something changed. If the window falls behind, extra events are dropped, never blocked on. MIDI passing through the plugin is unchanged.
+- Mouse notes are local only: they make no sound and aren't sent to the other person (sync comes with T-037's message channel).
+- Code: `Source/TinCanNotes.{h,cpp}` (note model, MIDI decoding, names, queue — no JUCE), `Source/TinCanTools.{h,cpp}` (window, panel, keyboard view built on JUCE `MidiKeyboardComponent`). Tests: `tests/TinCanNotesTest.cpp`.
+- **Manual test (needs a MIDI keyboard):** plug it in, Settings > Audio > tick it under *Active MIDI inputs*, open Tools: keys light blue while held; chords; repeated notes; hold the pedal and release keys → pale until the pedal comes up; unplug while holding a key → the key clears. Not done yet (no MIDI device connected during development).
+- Not yet: settings (range, names) aren't remembered between runs.
 
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.

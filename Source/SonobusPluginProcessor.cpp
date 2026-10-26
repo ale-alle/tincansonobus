@@ -7399,6 +7399,15 @@ void SonobusAudioProcessor::ensureBuffers(int numSamples)
 void SonobusAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages)
 {
     ScopedNoDenormals noDenormals;
+
+    if (mNoteTapEnabled.load(std::memory_order_relaxed) && !midiMessages.isEmpty()) {
+        TinCan::NoteEvent nev;
+        for (const auto meta : midiMessages) {
+            if (TinCan::decodeMidi(meta.data, meta.numBytes, TinCan::NoteSource::Midi, nev)) {
+                mNoteQueue.push(nev);  // dropped if the UI fell far behind
+            }
+        }
+    }
     auto totalInputChannels  = getTotalNumInputChannels();
     auto mainBusInputChannels  = getMainBusNumInputChannels();
     auto mainBusOutputChannels = getMainBusNumOutputChannels();

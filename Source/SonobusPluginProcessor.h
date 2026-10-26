@@ -22,6 +22,7 @@
 
 #include "SoundboardChannelProcessor.h"
 
+#include "TinCanNotes.h"
 #include "TinCanPacketCipher.h"
 
 typedef MVerb<float> MVerbFloat;
@@ -321,6 +322,11 @@ public:
     bool setLessonKey(const String & base64Key);
     bool hasLessonKey() const { return mPacketCipher.hasKey(); }
     int64_t getDroppedCipherPacketCount() const { return mDroppedCipherPackets; }
+
+    // Tin Can teaching tools (T-034): while enabled, note events from the MIDI input are copied
+    // into a lock-free queue for the on-screen instrument. Message thread pops them.
+    void setNoteTapEnabled(bool enabled) { mNoteTapEnabled = enabled; }
+    bool popNoteEvent(TinCan::NoteEvent & ev) { return mNoteQueue.pop(ev); }
     bool disconnectFromServer();
     double getElapsedConnectedTime() const { return mSessionConnectionStamp > 0 ? (Time::getMillisecondCounterHiRes() - mSessionConnectionStamp) * 1e-3 : 0.0; }
 
@@ -1113,6 +1119,9 @@ private:
 
     TinCan::PacketCipher mPacketCipher;
     std::atomic<int64_t> mDroppedCipherPackets { 0 };
+
+    std::atomic<bool> mNoteTapEnabled { false };
+    TinCan::SpscQueue<TinCan::NoteEvent, 1024> mNoteQueue;
     
     bool mAutoconnectGroupPeers = true;
     bool mIsConnectedToServer = false;

@@ -25,6 +25,7 @@
 #include "ReverbView.h"
 #include "VDONinjaView.h"
 #include "TinCanJoin.h"
+#include "TinCanTools.h"
 
 class RandomSentenceGenerator;
 class WaveformTransportComponent;
@@ -565,6 +566,10 @@ private:
 
     std::unique_ptr<TinCan::TicketRedeemer> mTicketRedeemer;
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
+    // Tin Can teaching tools (T-034): on-screen instrument etc., in a window of its own
+    std::unique_ptr<TextButton> mToolsButton;
+    std::unique_ptr<TinCan::ToolsWindow> mToolsWindow;
+    void showToolsWindow(bool show);
     String mLessonTitle;
 
     std::unique_ptr<TableListBox> mRemoteSinkListBox;
