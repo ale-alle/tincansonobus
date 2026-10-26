@@ -7,11 +7,13 @@ int failures = 0;
 
 void runPacketCipherTests();
 void runNotesTests();
+void runInstrumentsTests();
 
 int main()
 {
     runPacketCipherTests();
     runNotesTests();
+    runInstrumentsTests();
 
     if (failures == 0) {
         std::printf("TinCanTests: all checks passed\n");

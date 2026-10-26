@@ -4,6 +4,7 @@
 #pragma once
 
 #include "JuceHeader.h"
+#include "TinCanInstruments.h"
 #include "TinCanNotes.h"
 
 #include <functional>
@@ -26,13 +27,25 @@ struct NoteColours
     static Colour forNote(const NoteState & state, int note);
 };
 
+// how notes are named in every view; transpose > 0 names notes at written pitch
+struct NoteNaming
+{
+    bool allNames = false;
+    bool useFlats = false;
+    int middleCOctave = 4;
+    int transpose = 0;
+
+    String name(int concertNote) const { return String(noteName(concertNote + transpose, useFlats)); }
+    String label(int concertNote) const { return String(noteLabel(concertNote + transpose, useFlats, middleCOctave)); }
+};
+
 // piano keyboard drawn from a NoteState; mouse clicks play into the given MidiKeyboardState
 class KeyboardView : public MidiKeyboardComponent
 {
 public:
     KeyboardView(MidiKeyboardState & mouseState, const NoteState & notes);
 
-    void setNoteNames(bool all, bool flats, int middleCOctave);
+    void setNaming(const NoteNaming & naming);
     // fit the range into the current width without scrolling
     void setRangeToFit(int lowNote, int highNote);
     void resized() override;
@@ -46,10 +59,38 @@ protected:
 
 private:
     const NoteState & notes;
-    bool allNames = false;
-    bool useFlats = false;
-    int middleC = 4;
+    NoteNaming naming;
     int fitLow = 48, fitHigh = 84;
+};
+
+// guitar/bass neck seen from the player, highest string at the top; any tuning or string count
+class FretboardView : public Component
+{
+public:
+    explicit FretboardView(const NoteState & notes);
+
+    void setInstrument(const std::vector<int> & strings, int frets);
+    void setNaming(const NoteNaming & naming);
+
+    std::function<void(int note, bool on)> onMousePlay;  // concert pitch
+
+    void paint(Graphics & g) override;
+    void mouseDown(const MouseEvent & e) override;
+    void mouseUp(const MouseEvent & e) override;
+
+private:
+    juce::Rectangle<float> neckArea() const;
+    float fretX(int fret) const;           // x of the fret wire (0 = nut)
+    float noteX(int fret) const;           // where a note on this fret is drawn
+    float stringY(int string) const;
+    int stringAt(float y) const;
+    int fretAt(float x) const;
+
+    const NoteState & notes;
+    NoteNaming naming;
+    std::vector<int> strings { 40, 45, 50, 55, 59, 64 };
+    int frets = 22;
+    int mouseNote = -1;
 };
 
 class InstrumentPanel : public Component, private Timer, private MidiKeyboardState::Listener,
@@ -68,9 +109,16 @@ private:
     void handleNoteOff(MidiKeyboardState *, int channel, int note, float velocity) override;
     void changeListenerCallback(ChangeBroadcaster *) override;  // MIDI inputs turned on/off
 
+    void playLocal(int note, bool on, int channel, float velocity);
+    void notesChanged();
+    void selectInstrument(int index);
+    void selectTuning(int index);
+    void applyCustomTuning();
+    bool showTuningValidity();
     void updateRange();
-    void updateNames();
+    void updateNaming();
     void updateMidiStatus();
+    bool isFretted() const;
 
     SonobusAudioProcessor & processor;
     std::function<AudioDeviceManager*()> getDeviceManager;
@@ -78,16 +126,28 @@ private:
     NoteState notes;
     MidiKeyboardState mouseState;
     KeyboardView keyboard;
+    FretboardView fretboard;
+    NoteNaming naming;
 
+    ComboBox instrumentChoice;
+    // piano
     ComboBox rangeChoice;
     TextButton octaveDown { "<" }, octaveUp { ">" };
-    ToggleButton namesToggle { TRANS("All note names") }, flatsToggle { TRANS("Flats") };
+    // guitar and bass
+    ComboBox tuningChoice;
+    TextEditor tuningEditor;
+    // all
+    ComboBox transposeChoice;
     ComboBox middleCChoice;
+    ToggleButton namesToggle { TRANS("All note names") }, flatsToggle { TRANS("Flats") };
     Label midiStatus;
+    Label lastNoteLabel;
     juce::Rectangle<int> legendArea;
 
+    int instrumentIndex = 0;
     int lowNote = 48;   // C3
     int numKeys = 37;
+    int lastNote = -1;  // most recent note-on, concert pitch
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentPanel)
 };

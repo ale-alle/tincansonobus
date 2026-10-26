@@ -368,6 +368,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/SonobusTypes.h
         Source/SuggestNewGroupView.cpp
         Source/SuggestNewGroupView.h
+        Source/TinCanInstruments.cpp
+        Source/TinCanInstruments.h
         Source/TinCanJoin.cpp
         Source/TinCanJoin.h
         Source/TinCanNotes.cpp
@@ -704,6 +706,8 @@ add_executable(TinCanTests EXCLUDE_FROM_ALL
     tests/TinCanTestMain.cpp
     tests/TinCanPacketCipherTest.cpp
     tests/TinCanNotesTest.cpp
+    tests/TinCanInstrumentsTest.cpp
     Source/TinCanPacketCipher.cpp
     Source/TinCanNotes.cpp
+    Source/TinCanInstruments.cpp
     deps/monocypher/monocypher.c)

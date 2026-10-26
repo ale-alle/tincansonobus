@@ -63,5 +63,13 @@ For testing between two homes, a throwaway Toronto server (stock aooserver + Liv
 - **Manual test (needs a MIDI keyboard):** plug it in, Settings > Audio > tick it under *Active MIDI inputs*, open Tools: keys light blue while held; chords; repeated notes; hold the pedal and release keys → pale until the pedal comes up; unplug while holding a key → the key clears. Not done yet (no MIDI device connected during development).
 - Not yet: settings (range, names) aren't remembered between runs.
 
+### Guitar and bass (T-035)
+- The instrument menu switches between piano, guitar (6 strings, 22 frets), bass (4 strings, 20 frets) and bass (5 strings, 21 frets). Only the view changes; the note state and the MIDI input carry on.
+- Fretboards show every place a sounding note can be played, highest string at the top, with real fret spacing. Clicking a string at a fret plays that note (orange).
+- Tunings are data (`getInstruments()` in `Source/TinCanInstruments.cpp`): guitar standard, drop D, half step down, DADGAD, open G, open D; bass standard, drop D, half step down; 5-string standard. The text field takes any tuning of 1-12 strings, lowest first (`B1 E2 A2 D3 G3 B3 E4` for a 7-string). It turns red while invalid and applies on Enter; typing a preset's notes selects that preset.
+- **Note names** menu: concert pitch, or written pitch for Bb, Bb + octave, Eb, Eb + octave, F, A and octave (guitar/bass) instruments. Every label in the view then shows written pitch, and the top right shows the last note as "Written D4  Concert C4". The tuning field is always concert pitch.
+- Tests: `tests/TinCanInstrumentsTest.cpp` (note→fret for standard, drop D, DADGAD, 7-string, 4- and 5-string bass, fret limits; note and tuning parsing).
+- **Development aid:** `TINCAN_DEMO_NOTES="C4 E4 G4"` (environment variable) shows those notes as held on the MIDI input when the Tools window opens — used to check the views without a MIDI keyboard.
+
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.
