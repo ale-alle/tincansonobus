@@ -368,6 +368,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/SonobusTypes.h
         Source/SuggestNewGroupView.cpp
         Source/SuggestNewGroupView.h
+        Source/TinCanBeatClock.cpp
+        Source/TinCanBeatClock.h
         Source/TinCanInstruments.cpp
         Source/TinCanInstruments.h
         Source/TinCanJoin.cpp
@@ -376,6 +378,10 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanNotes.h
         Source/TinCanPacketCipher.cpp
         Source/TinCanPacketCipher.h
+        Source/TinCanPitch.cpp
+        Source/TinCanPitch.h
+        Source/TinCanPracticeTools.cpp
+        Source/TinCanPracticeTools.h
         Source/TinCanTools.cpp
         Source/TinCanTools.h
         Source/TinCanVideo.cpp
@@ -707,7 +713,29 @@ add_executable(TinCanTests EXCLUDE_FROM_ALL
     tests/TinCanPacketCipherTest.cpp
     tests/TinCanNotesTest.cpp
     tests/TinCanInstrumentsTest.cpp
+    tests/TinCanBeatClockTest.cpp
+    tests/TinCanPitchTest.cpp
     Source/TinCanPacketCipher.cpp
     Source/TinCanNotes.cpp
     Source/TinCanInstruments.cpp
+    Source/TinCanBeatClock.cpp
+    Source/TinCanPitch.cpp
     deps/monocypher/monocypher.c)
+
+# Tin Can audio tests (JUCE, console): cmake --build build --target TinCanAudioTests --config Release
+juce_add_console_app(TinCanAudioTests PRODUCT_NAME "TinCanAudioTests")
+juce_generate_juce_header(TinCanAudioTests)
+set_target_properties(TinCanAudioTests PROPERTIES EXCLUDE_FROM_ALL TRUE)
+target_sources(TinCanAudioTests PRIVATE
+    tests/TinCanMetronomeTest.cpp
+    Source/Metronome.cpp
+    Source/TinCanBeatClock.cpp)
+target_compile_definitions(TinCanAudioTests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    TINCAN_TEST_IMAGES="${CMAKE_CURRENT_SOURCE_DIR}/images")
+target_link_libraries(TinCanAudioTests PRIVATE
+    juce::juce_audio_formats
+    juce::juce_audio_basics
+    juce::juce_gui_basics
+    juce::juce_recommended_config_flags)

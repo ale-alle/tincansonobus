@@ -71,5 +71,19 @@ For testing between two homes, a throwaway Toronto server (stock aooserver + Liv
 - Tests: `tests/TinCanInstrumentsTest.cpp` (note→fret for standard, drop D, DADGAD, 7-string, 4- and 5-string bass, fret limits; note and tuning parsing).
 - **Development aid:** `TINCAN_DEMO_NOTES="C4 E4 G4"` (environment variable) shows those notes as held on the MIDI input when the Tools window opens — used to check the views without a MIDI keyboard.
 
+### Tuner (T-036)
+- *Tuner* tab: listens to one of your inputs (menu, default Input 1), before input gain and effects. Shows note and octave, a cents needle (green band = within 5 cents), Hz, and "In tune" / "Sharp: tune down" / "Flat: tune up". Reference A4 415-466 Hz (default 440); sharps or flats. "Too quiet", "No sound on this input" and "Can't hear a clear note" when it can't read a pitch.
+- **Threads:** while the tab is showing, `processBlock` copies that one input channel into a fixed 16k-sample ring (no allocation, no locks); a low-priority "CanDuet tuner" thread reads the newest ~85 ms 20 times a second and runs the detector; the UI shows the latest result. Switching tab or closing the window stops the copy and the thread. The tuner makes no sound and sends nothing.
+- **Detector** (`Source/TinCanPitch.{h,cpp}`, no JUCE): YIN on a copy decimated to ~12 kHz finds the period, then it is refined at the full rate with parabolic interpolation. Range 27 Hz-2.1 kHz (5-string bass low B to above most fundamentals). A sample-rate change re-prepares it.
+- Tests (`tests/TinCanPitchTest.cpp`): sines from B0 to C7 in 0.37-semitone steps at 44.1/48/96 kHz, worst error 0.10 cents (target 1); harmonic-rich tones with a strong 2nd harmonic read the fundamental (no octave errors); silence, -63 dBFS and white noise give the right states; a tone with noise at ~20 dB SNR is within 3 cents.
+- Checked in the app: the tab listens to the laptop microphone and shows "Can't hear a clear note" for room noise. **Manual test still to do:** play or sing a note (or a tuning fork app) and compare with another tuner.
+
+### Metronome (T-036)
+- *Metronome* tab: the same SonoBus metronome as the toolbar (on/off, tempo, click volume and "Let the other person hear it" are the existing settings, off by default) plus **beats per bar** (1-12; 1 = no accent, the old behaviour and still the default), **clicks per beat** (1-4) and **count-in** (none, 1 or 2 bars of accented clicks when the metronome starts on its own). A tap-tempo button and a beat indicator (accent beat orange, count-in labelled).
+- New parameters, added after all existing ones so saved sessions and plugin automation keep their indexes: `metbeatsperbar`, `metsubdivision`, `metcountin`.
+- **Timing:** `Source/Metronome.cpp` now takes its click schedule from `TinCan::BeatClock` (`Source/TinCanBeatClock.{h,cpp}`, no JUCE). The position is a double in beats and each click lands on the nearest sample; the old code rounded every beat down to whole samples (e.g. 113 bpm at 48 kHz ran 0.003 % fast). Following a host or file position works as before.
+- Tests: `tests/TinCanBeatClockTest.cpp` (one hour at 113 bpm, every click within one sample; identical clicks for block sizes 1-4096; bars, subdivisions, count-in, tempo changes) and **`TinCanAudioTests`** (`tests/TinCanMetronomeTest.cpp`, a JUCE console test rendering the real click sounds: the default metronome, 4/4 with eighths, count-in and host-synced output all match the expected samples exactly).
+- Checked in the app with the click volume at zero: count-in shows, then beats 1-4 cycle; triplet ticks show. Settings were put back afterwards. **Manual test still to do:** listen to the accent, subdivision and count-in sounds.
+
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.

@@ -8,12 +8,16 @@ int failures = 0;
 void runPacketCipherTests();
 void runNotesTests();
 void runInstrumentsTests();
+void runBeatClockTests();
+void runPitchTests();
 
 int main()
 {
     runPacketCipherTests();
     runNotesTests();
     runInstrumentsTests();
+    runBeatClockTests();
+    runPitchTests();
 
     if (failures == 0) {
         std::printf("TinCanTests: all checks passed\n");

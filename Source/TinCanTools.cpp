@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanTools.h"
+#include "TinCanPracticeTools.h"
 #include "SonobusPluginProcessor.h"
 
 namespace TinCan {
@@ -625,6 +626,8 @@ ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioD
     auto * tabs = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabs->setTabBarDepth(28);
     tabs->addTab(TRANS("Instrument"), Colour(0xff1c1c1c), new InstrumentPanel(processor, getDeviceManager), true);
+    tabs->addTab(TRANS("Tuner"), Colour(0xff1c1c1c), new TunerPanel(processor), true);
+    tabs->addTab(TRANS("Metronome"), Colour(0xff1c1c1c), new MetronomePanel(processor), true);
 
     setUsingNativeTitleBar(true);
     setContentOwned(tabs, false);

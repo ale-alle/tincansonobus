@@ -47,6 +47,8 @@ Example: `cmake -B build -DTINCAN_SERVER_HOST=connect.tincanstudios.ca`.
 ```powershell
 cmake --build build --config Release --target TinCanTests
 build\Release\TinCanTests.exe      # prints "all checks passed"
+cmake --build build --config Release --target TinCanAudioTests
+build\TinCanAudioTests_artefacts\Release\TinCanAudioTests.exe   # metronome rendering (JUCE)
 ```
 
 Debug build (for stepping through code in Visual Studio): `cmake --build build --config Debug`, or open `build\SonoBus.sln`.

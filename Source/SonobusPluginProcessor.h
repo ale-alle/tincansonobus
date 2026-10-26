@@ -24,6 +24,7 @@
 
 #include "TinCanNotes.h"
 #include "TinCanPacketCipher.h"
+#include "TinCanPitch.h"
 
 typedef MVerb<float> MVerbFloat;
 
@@ -289,6 +290,10 @@ public:
     static String paramDefaultPeerLevel;
     static String paramSyncMetToHost;
     static String paramSyncMetToFilePlayback;
+    // Tin Can metronome additions (T-036)
+    static String paramMetBeatsPerBar;
+    static String paramMetSubdivision;
+    static String paramMetCountIn;
     static String paramInputReverbLevel;
     static String paramInputReverbSize;
     static String paramInputReverbDamping;
@@ -327,6 +332,19 @@ public:
     // into a lock-free queue for the on-screen instrument. Message thread pops them.
     void setNoteTapEnabled(bool enabled) { mNoteTapEnabled = enabled; }
     bool popNoteEvent(TinCan::NoteEvent & ev) { return mNoteQueue.pop(ev); }
+
+    // tuner (T-036): while a channel is set (>= 0), that input is copied into a ring for the
+    // tuner thread, before input gain and effects. Not sent anywhere.
+    void setTunerChannel(int channel) {
+        if (mTunerChannel < 0 && channel >= 0) mTunerRing.reset();  // nothing writes while off
+        mTunerChannel = channel;
+    }
+    int getTunerChannel() const { return mTunerChannel; }
+    bool readTunerSamples(float * dest, int n) const { return mTunerRing.readLatest(dest, n); }
+
+    // metronome position for the beat indicator (T-036), any thread
+    double getMetronomeBeatPosition() const;
+    double getMetronomeCountInRemaining() const;
     bool disconnectFromServer();
     double getElapsedConnectedTime() const { return mSessionConnectionStamp > 0 ? (Time::getMillisecondCounterHiRes() - mSessionConnectionStamp) * 1e-3 : 0.0; }
 
@@ -1009,6 +1027,9 @@ private:
     Atomic<int>   mSendChannels  { 1 }; // 0 is match inputs, 1 is 1, etc
     Atomic<float>   mMetGain    { 0.5f };
     Atomic<double>   mMetTempo    { 100.0f };
+    Atomic<int>   mMetBeatsPerBar  { 1 };   // 1 = no accent, as SonoBus always did
+    Atomic<int>   mMetSubdivision  { 1 };
+    Atomic<int>   mMetCountIn  { 0 };
     Atomic<bool>   mSendPlaybackAudio  { false };
     Atomic<bool>   mSendSoundboardAudio  { false };
     Atomic<bool>   mHearLatencyTest  { false };
@@ -1122,6 +1143,9 @@ private:
 
     std::atomic<bool> mNoteTapEnabled { false };
     TinCan::SpscQueue<TinCan::NoteEvent, 1024> mNoteQueue;
+
+    std::atomic<int> mTunerChannel { -1 };
+    TinCan::SampleRing mTunerRing { 16384 };
     
     bool mAutoconnectGroupPeers = true;
     bool mIsConnectedToServer = false;

@@ -9,10 +9,10 @@
 using namespace SonoAudio;
 
 Metronome::Metronome(double samplerate)
-: sampleRate(samplerate), mTempo(0), mBeatsPerBar(1), mGain(1.0f), mPendingGain(1.0f),
- mCurrentBarRemainRatio(0), mCurrentBeatRemainRatio(0), mCurrBeatPos(0)
+: sampleRate(samplerate), mTempo(0), mBeatsPerBar(1), mGain(1.0f), mPendingGain(1.0f)
 {
     tempBuffer.setSize(1, 4096);
+    mSubState.gain = 0.4f;
 }
 
 Metronome::~Metronome()
@@ -31,6 +31,17 @@ void Metronome::setGain(float val, bool force)
 
 
 
+void Metronome::SampleState::render(float * dest, long n)
+{
+    long count = std::min(n, sampleRemain);
+    for (long i = 0; i < count; ++i)
+    {
+        dest[i] += gain * sampleData[samplePos + i];
+    }
+    sampleRemain -= count;
+    samplePos += count;
+}
+
 // the timestamp passed in should be relative to time zero for the current tempo
 void Metronome::processMix (int nframes, float * inOutDataL, float * inOutDataR, const double beatTime, bool relativeTime)
 {
@@ -47,104 +58,46 @@ void Metronome::processMix (int nframes, float * inOutDataL, float * inOutDataR,
     }
     
     tempBuffer.clear(0, nframes);
-    
-    int frames = nframes;
-    
-    double beatInt;
-    double barInt;
-    double beatFrac = modf(beatTime, &beatInt);
-    double barFrac = modf(beatTime / mBeatsPerBar, &barInt);
-        
-    long framesInBeat = (long) (sampleRate * 60 / mTempo);
-    long framesInBar = mBeatsPerBar * framesInBeat;
-    double framesInBeatF = (sampleRate * 60 / mTempo);
 
-    
-    long framesUntilBeat; 
-    long framesUntilBar;
-    
-    if (relativeTime) {
+    mClock.setSampleRate(sampleRate);
+    mClock.setTempo(mTempo);
+    mClock.setBeatsPerBar(mBeatsPerBar);
+    mClock.setSubdivision(mSubdivision);
+    if (!relativeTime) {
+        // following the host or file playback position
+        mClock.setPosition(beatTime);
+    }
 
-        framesUntilBar = (long) lrint(mCurrentBarRemainRatio * framesInBar);
-        framesUntilBeat = (long) lrint(mCurrentBeatRemainRatio * framesInBeat);
-    }
-    else {
-        framesUntilBar =  (long) lrint(fmod(1.0 - barFrac, 1.0) * framesInBar);;
-        framesUntilBeat = (long) lrint(fmod(1.0 - beatFrac, 1.0) * framesInBeat);
+    TinCan::BeatClock::Click clicks[64];
+    int numClicks = mClock.process(nframes, clicks, 64);
 
-        //DBG("Beattime: " << beatTime << " framesuntilbeat: " << framesUntilBeat << "  beatfrac: " << beatFrac);
-        mCurrBeatPos = beatTime;
-    }
-    
-    if (framesUntilBeat != framesUntilBar && abs(framesUntilBeat - framesUntilBar) < framesInBeat / 2) {
-        // force the framesuntilbar to be equal to framesuntilbeat if they are close but not equal
-        framesUntilBar = framesUntilBeat;
-    }
-    
     float * metbuf = tempBuffer.getWritePointer(0);
-    
-    while (frames > 0)
-    {
-        if (framesUntilBar == 0 )
-        {
-            framesUntilBar = framesInBar;
-            
-            if (mBeatsPerBar > 1) {
-                // start playback of bar sample
-                framesUntilBeat = framesInBeat; // also reset beat so it doesn't play with the bar
+    long pos = 0;
 
-                mBarState.sampleRemain = mBarState.sampleLength;
-                mBarState.samplePos = 0;
-                //printf("Starting bar playout for tempo %g  TS: %ld\n", mTempo, iTimestamp);
-            }
+    for (int c = 0; c <= numClicks; ++c)
+    {
+        long until = c < numClicks ? clicks[c].offset : nframes;
+        if (until > pos) {
+            // run the sounds already playing up to the next click
+            mBarState.render(metbuf + pos, until - pos);
+            mBeatState.render(metbuf + pos, until - pos);
+            mSubState.render(metbuf + pos, until - pos);
+            pos = until;
         }
-        
-        if (framesUntilBeat == 0)
-        {
-            framesUntilBeat = framesInBeat;
-            // start playback of beat sample
-            
-            mBeatState.sampleRemain = mBeatState.sampleLength;
-            mBeatState.samplePos = 0;            
-            //printf("Starting beat playout  for tempo %g   TS: %ld \n", mTempo, iTimestamp);            
+        if (c == numClicks) break;
+
+        const auto & click = clicks[c];
+        if (click.kind == TinCan::BeatClock::Click::Sub) {
+            mSubState.start();
         }
-        
-        // run enough samples to get to start of next beat/bar or what's left
-        long n = std::max((long)1, std::min ((long)frames, std::min(framesUntilBar, framesUntilBeat)));
-        
-        if (mBarState.sampleRemain > 0)
-        {
-            // playing bar sound
-            long barn = std::min (n, mBarState.sampleRemain);
-            for (long i = 0; i < barn; ++i)
-            {
-                metbuf[i] += mBarState.sampleData[mBarState.samplePos + i];
-            }
-            
-            mBarState.sampleRemain -= barn;
-            mBarState.samplePos += barn;
+        else if (click.kind == TinCan::BeatClock::Click::Bar || click.countIn) {
+            // count-in beats all use the accent so they stand apart from the bars that follow
+            mBarState.start();
+            mBeatState.sampleRemain = 0;
         }
-        
-        if (mBeatState.sampleRemain > 0) 
-        {
-            // playing beat sound
-            long beatn = std::min (n, mBeatState.sampleRemain);
-            for (long i = 0; i < beatn; ++i)
-            {
-                metbuf[i] +=  mBeatState.sampleData[mBeatState.samplePos + i];
-            }
-            
-            mBeatState.sampleRemain -= beatn;
-            mBeatState.samplePos += beatn;
+        else {
+            mBeatState.start();
         }
-        
-                
-        framesUntilBar -= n;
-        framesUntilBeat -= n;
-        frames -= n;
-        //pInOutL += n;
-        //pInOutR += n;
-        metbuf += n;
     }
     
     // apply gain
@@ -162,28 +115,27 @@ void Metronome::processMix (int nframes, float * inOutDataL, float * inOutDataR,
         FloatVectorOperations::add(inOutDataR, tempBuffer.getReadPointer(0), nframes);
     }
 
-    mCurrentBarRemainRatio = framesUntilBar / (double)framesInBar;
-    mCurrentBeatRemainRatio = framesUntilBeat / (double)framesInBeat;        
-    
-    if (relativeTime) {
-        mCurrBeatPos += nframes / framesInBeatF;
-    }
+    mCurrBeatPos.store(mClock.getPosition(), std::memory_order_relaxed);
+    mCountInRemaining.store(mClock.getCountInRemaining(), std::memory_order_relaxed);
 }
 
 void Metronome::resetRelativeStart(double startBeatPos)
 {
-    mCurrBeatPos = startBeatPos;
-    mCurrentBarRemainRatio = 0.0;
-    mCurrentBeatRemainRatio = fmod(1.0 - fmod(mCurrBeatPos, 1.0), 1.0);
-    mCurrentBarRemainRatio = fmod(1.0 - fmod(mCurrBeatPos / mBeatsPerBar, 1.0), 1.0);
+    mClock.setBeatsPerBar(mBeatsPerBar);
+    mClock.setCountInBars(startBeatPos == 0.0 ? mCountInBars : 0);
+    mClock.restart();
+    if (startBeatPos != 0.0) {
+        mClock.setPosition(startBeatPos);
+    }
+    mCurrBeatPos.store(mClock.getPosition(), std::memory_order_relaxed);
+    mCountInRemaining.store(mClock.getCountInRemaining(), std::memory_order_relaxed);
 }
 
 void Metronome::setRemainRatios(double barRemain, double beatRemain)
 {
-    mCurrentBarRemainRatio = barRemain;
-    mCurrentBeatRemainRatio = beatRemain;
-
-    mCurrBeatPos = (1.0 - barRemain) * mBeatsPerBar;
+    // kept for compatibility: place the clock at the matching point of the current bar
+    ignoreUnused(beatRemain);
+    mClock.setPosition((1.0 - barRemain) * mBeatsPerBar);
 }
 
 
@@ -213,6 +165,10 @@ void Metronome::loadBeatSoundFromBinaryData(const void* data, size_t sizeBytes)
         mBeatState.sampleLength = beatSoundBuffer.getNumSamples();
         mBeatState.samplePos = 0;
         mBeatState.sampleRemain = 0;
+        mSubState.sampleData = mBeatState.sampleData;
+        mSubState.sampleLength = mBeatState.sampleLength;
+        mSubState.samplePos = 0;
+        mSubState.sampleRemain = 0;
     }
 }
 

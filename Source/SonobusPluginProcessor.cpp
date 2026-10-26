@@ -75,6 +75,9 @@ String SonobusAudioProcessor::paramAutoReconnectLast  ("reconnectlast");
 String SonobusAudioProcessor::paramDefaultPeerLevel  ("defPeerLevel");
 String SonobusAudioProcessor::paramSyncMetToHost  ("syncMetHost");
 String SonobusAudioProcessor::paramSyncMetToFilePlayback  ("syncMetFile");
+String SonobusAudioProcessor::paramMetBeatsPerBar  ("metbeatsperbar");
+String SonobusAudioProcessor::paramMetSubdivision  ("metsubdivision");
+String SonobusAudioProcessor::paramMetCountIn  ("metcountin");
 String SonobusAudioProcessor::paramInputReverbLevel  ("inreverblevel");
 String SonobusAudioProcessor::paramInputReverbSize  ("inreverbsize");
 String SonobusAudioProcessor::paramInputReverbDamping  ("inreverbdamp");
@@ -715,6 +718,10 @@ mState (*this, &mUndoManager, "SonoBusAoO",
                                           [](float v, int maxlen) -> String { return String(v, 0) + " ms"; },
                                           [](const String& s) -> float { return s.getFloatValue(); }),
     std::make_unique<AudioParameterBool>(ParameterID(paramSyncMetToFilePlayback, 1), TRANS ("Sync Met to File Playback"), false),
+    // Tin Can (T-036), added last so existing parameter indexes don't move
+    std::make_unique<AudioParameterInt>(ParameterID(paramMetBeatsPerBar, 1), TRANS ("Metronome Beats Per Bar"), 1, 12, mMetBeatsPerBar.get()),
+    std::make_unique<AudioParameterInt>(ParameterID(paramMetSubdivision, 1), TRANS ("Metronome Subdivision"), 1, 4, mMetSubdivision.get()),
+    std::make_unique<AudioParameterInt>(ParameterID(paramMetCountIn, 1), TRANS ("Metronome Count-in Bars"), 0, 2, mMetCountIn.get()),
 
 })
 {
@@ -751,6 +758,9 @@ mState (*this, &mUndoManager, "SonoBusAoO",
     mState.addParameterListener (paramDefaultPeerLevel, this);
     mState.addParameterListener (paramSyncMetToHost, this);
     mState.addParameterListener (paramSyncMetToFilePlayback, this);
+    mState.addParameterListener (paramMetBeatsPerBar, this);
+    mState.addParameterListener (paramMetSubdivision, this);
+    mState.addParameterListener (paramMetCountIn, this);
     mState.addParameterListener (paramInputReverbSize, this);
     mState.addParameterListener (paramInputReverbLevel, this);
     mState.addParameterListener (paramInputReverbDamping, this);
@@ -1210,6 +1220,16 @@ bool SonobusAudioProcessor::disconnectFromServer()
 
 
     return true;
+}
+
+double SonobusAudioProcessor::getMetronomeBeatPosition() const
+{
+    return mMetronome ? mMetronome->getCurrBeatPos() : 0.0;
+}
+
+double SonobusAudioProcessor::getMetronomeCountInRemaining() const
+{
+    return mMetronome ? mMetronome->getCountInRemaining() : 0.0;
 }
 
 bool SonobusAudioProcessor::setLessonKey(const String & base64Key)
@@ -6649,6 +6669,15 @@ void SonobusAudioProcessor::parameterChanged (const String &parameterID, float n
     else if (parameterID == paramMetTempo) {
         mMetTempo = newValue;
     }
+    else if (parameterID == paramMetBeatsPerBar) {
+        mMetBeatsPerBar = (int) newValue;
+    }
+    else if (parameterID == paramMetSubdivision) {
+        mMetSubdivision = (int) newValue;
+    }
+    else if (parameterID == paramMetCountIn) {
+        mMetCountIn = (int) newValue;
+    }
     else if (parameterID == paramMetEnabled) {
         mMetEnabled = newValue > 0;
     }
@@ -7438,6 +7467,11 @@ void SonobusAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
 
     int numSamples = buffer.getNumSamples();
 
+    int tunerch = mTunerChannel.load(std::memory_order_relaxed);
+    if (tunerch >= 0 && tunerch < totalInputChannels) {
+        mTunerRing.write(buffer.getReadPointer(tunerch), numSamples);
+    }
+
 
     if (numSamples != lastSamplesPerBlock) {
         //DBG("blocksize changed from " << lastSamplesPerBlock << " to " << numSamples);
@@ -7778,6 +7812,10 @@ void SonobusAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
         // notify host
         mState.getParameter(paramMetEnabled)->setValueNotifyingHost(metenabled ? 1.0f : 0.0f);
     }
+
+    mMetronome->setBeatsPerBar(mMetBeatsPerBar.get());
+    mMetronome->setSubdivision(mMetSubdivision.get());
+    mMetronome->setCountInBars(mMetCountIn.get());
 
     if (metenabled != mLastMetEnabled) {
         if (metenabled) {
