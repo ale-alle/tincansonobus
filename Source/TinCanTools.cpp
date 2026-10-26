@@ -618,8 +618,39 @@ void InstrumentPanel::handleNoteOff(MidiKeyboardState *, int channel, int note, 
 
 //==============================================================================
 
+// Workspace tab (T-037): the board itself needs room, so it has a window of its own
+class WorkspacePanel : public Component
+{
+public:
+    explicit WorkspacePanel(std::function<void()> open)
+    {
+        info.setText(TRANS("A board for lesson material: open images, add whiteboards, and draw, highlight, "
+                           "point with arrows or write on them. Files stay on this computer; for now only you see the board."),
+                     dontSendNotification);
+        info.setFont(Font(14.0f));
+        info.setJustificationType(Justification::topLeft);
+        addAndMakeVisible(info);
+        openButton.onClick = open;
+        addAndMakeVisible(openButton);
+    }
+
+    void paint(Graphics & g) override { g.fillAll(Colour(0xff1c1c1c)); }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced(12);
+        openButton.setBounds(r.removeFromTop(32).removeFromLeft(200));
+        r.removeFromTop(10);
+        info.setBounds(r.removeFromTop(60));
+    }
+
+private:
+    Label info;
+    TextButton openButton { TRANS("Open the workspace") };
+};
+
 ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                         std::function<void()> onCloseFunc)
+                         std::function<void()> openWorkspace, std::function<void()> onCloseFunc)
     : DocumentWindow(TRANS("Teaching tools"), Colour(0xff1c1c1c), DocumentWindow::allButtons),
       onClose(std::move(onCloseFunc))
 {
@@ -628,6 +659,7 @@ ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioD
     tabs->addTab(TRANS("Instrument"), Colour(0xff1c1c1c), new InstrumentPanel(processor, getDeviceManager), true);
     tabs->addTab(TRANS("Tuner"), Colour(0xff1c1c1c), new TunerPanel(processor), true);
     tabs->addTab(TRANS("Metronome"), Colour(0xff1c1c1c), new MetronomePanel(processor), true);
+    tabs->addTab(TRANS("Workspace"), Colour(0xff1c1c1c), new WorkspacePanel(std::move(openWorkspace)), true);
 
     setUsingNativeTitleBar(true);
     setContentOwned(tabs, false);

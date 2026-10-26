@@ -386,6 +386,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanTools.h
         Source/TinCanVideo.cpp
         Source/TinCanVideo.h
+        Source/TinCanWorkspace.cpp
+        Source/TinCanWorkspace.h
         Source/VDONinjaView.h
         Source/VersionInfo.cpp
         Source/VersionInfo.h
@@ -548,6 +550,9 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         images/dots.svg
         images/bar_click.wav
         images/beat_click.wav
+        workspace-page/index.html
+        workspace-page/workspace-model.js
+        workspace-page/workspace-ui.js
         images/chat.svg
         images/chat_dots.svg
         images/checkmark.svg

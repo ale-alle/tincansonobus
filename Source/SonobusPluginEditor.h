@@ -26,6 +26,7 @@
 #include "VDONinjaView.h"
 #include "TinCanJoin.h"
 #include "TinCanTools.h"
+#include "TinCanWorkspace.h"
 
 class RandomSentenceGenerator;
 class WaveformTransportComponent;
@@ -570,6 +571,9 @@ private:
     std::unique_ptr<TextButton> mToolsButton;
     std::unique_ptr<TinCan::ToolsWindow> mToolsWindow;
     void showToolsWindow(bool show);
+    // lesson workspace (T-037); kept when closed so the board survives
+    std::unique_ptr<TinCan::WorkspaceWindow> mWorkspaceWindow;
+    void showWorkspace();
     String mLessonTitle;
 
     std::unique_ptr<TableListBox> mRemoteSinkListBox;

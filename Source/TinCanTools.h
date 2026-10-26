@@ -156,7 +156,7 @@ class ToolsWindow : public DocumentWindow
 {
 public:
     ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                std::function<void()> onClose);
+                std::function<void()> openWorkspace, std::function<void()> onClose);
     ~ToolsWindow() override;
 
     void closeButtonPressed() override;

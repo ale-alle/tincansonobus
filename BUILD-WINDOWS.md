@@ -49,6 +49,7 @@ cmake --build build --config Release --target TinCanTests
 build\Release\TinCanTests.exe      # prints "all checks passed"
 cmake --build build --config Release --target TinCanAudioTests
 build\TinCanAudioTests_artefacts\Release\TinCanAudioTests.exe   # metronome rendering (JUCE)
+node --test workspace-page/tests/workspace-model.test.js          # workspace model (Node 18+)
 ```
 
 Debug build (for stepping through code in Visual Studio): `cmake --build build --config Debug`, or open `build\SonoBus.sln`.

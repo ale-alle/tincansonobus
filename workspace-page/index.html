@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPLv3-or-later WITH Appstore-exception
+     Copyright (C) 2026 Tin Can Studios
+
+     CanDuet lesson workspace (T-037). Shown inside the app's workspace window (WebView2, D-019).
+     Open images (PDFs follow, see doc/TINCAN-WORKSPACE.md) as cards on a board, move/resize/hide
+     them, and draw on them.
+     Stage 1: local only. Files never leave this computer. The model (workspace-model.js) is
+     already built for sharing with the other person (stage 2). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>CanDuet workspace</title>
+<style>
+  :root { --bg: #111317; --panel: #1c1f26; --panel2: #232833; --text: #eef0f4; --muted: #9aa3b2;
+          --accent: #f2a541; --blue: #47b0f8; --danger: #e5645a; --line: #3a404c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 14px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  /* the toolbar wraps onto a second row in narrow windows */
+  #bar { flex: none; min-height: 48px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+         padding: 7px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #middle { position: relative; flex: 1; min-height: 0; }
+  #bar .sep { width: 1px; height: 28px; background: var(--line); margin: 0 4px; flex: none; }
+  button, select { font: inherit; color: var(--text); background: #2a2f39; border: 1px solid var(--line);
+                   border-radius: 6px; padding: 4px 10px; min-height: 32px; flex: none; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: #3b4352; border-color: var(--accent); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .swatch { width: 26px; min-height: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
+  .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--accent); }
+  #colours { display: flex; gap: 4px; flex: none; }
+  #hint[hidden], .card[hidden] { display: none; }
+  #status { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; padding-left: 8px;
+            flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+  #side { position: absolute; left: 0; top: 0; bottom: 0; width: 210px; background: var(--panel); border-right: 1px solid var(--line);
+          padding: 10px; overflow-y: auto; }
+  #side h2 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  #side ul { list-style: none; margin: 0; padding: 0; }
+  #side li { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+  #side li label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  #side li button { min-height: 24px; padding: 0 6px; font-size: 12px; }
+  #side .empty { color: var(--muted); font-size: 13px; }
+  body.no-side #side { display: none; }
+  #board { position: absolute; left: 210px; right: 0; top: 0; bottom: 0; overflow: auto; }
+  body.no-side #board { left: 0; }
+  #canvasArea { position: relative; min-height: 100%; }
+  #hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted);
+          padding: 24px; pointer-events: none; font-size: 15px; }
+  #board.dragover { outline: 3px dashed var(--accent); outline-offset: -6px; }
+  .card { position: absolute; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+          box-shadow: 0 6px 20px rgba(0,0,0,.35); display: flex; flex-direction: column; overflow: hidden; }
+  .card.active { border-color: var(--accent); }
+  .card .title { height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 10px; background: #2a2f39;
+                 cursor: grab; user-select: none; flex: none; }
+  .card .title .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .card .title button { min-height: 24px; padding: 0 7px; font-size: 12px; background: transparent; border-color: transparent; }
+  .card .title button:hover { border-color: var(--line); }
+  .card .content { position: relative; flex: 1; background: #fff; overflow: hidden; }
+  .card .content img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: contain; }
+  .card .content canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .card .resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize;
+                  background: linear-gradient(135deg, transparent 50%, var(--muted) 50%); opacity: .8; }
+  .textinput { position: absolute; z-index: 1000; font: 16px "Segoe UI", sans-serif; padding: 4px 6px; min-width: 160px;
+               border: 2px solid var(--accent); border-radius: 4px; background: #fff; color: #111; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div id="bar" role="toolbar" aria-label="Workspace tools">
+  <button id="open" title="Open an image (or drop files on the board)">Open file…</button>
+  <button id="addBoard" title="Add a blank whiteboard">+ Whiteboard</button>
+  <button id="toggleSide" aria-pressed="true" title="Show or hide the list of materials">List</button>
+  <span class="sep"></span>
+  <button data-tool="move" aria-pressed="true" title="Move and resize cards (M)">Move</button>
+  <button data-tool="pen" aria-pressed="false" title="Draw (P)">Pen</button>
+  <button data-tool="highlight" aria-pressed="false" title="Highlight (H)">Highlight</button>
+  <button data-tool="arrow" aria-pressed="false" title="Arrow (A)">Arrow</button>
+  <button data-tool="text" aria-pressed="false" title="Text (T)">Text</button>
+  <button data-tool="erase" aria-pressed="false" title="Remove a mark: click it (E)">Eraser</button>
+  <span class="sep"></span>
+  <span id="colours" role="group" aria-label="Colour"></span>
+  <span class="sep"></span>
+  <button id="undo" title="Undo your last mark (Ctrl+Z)">Undo</button>
+  <button id="clearCard" title="Remove all marks on the selected card">Clear card</button>
+  <button id="clearAll" title="Remove all marks on every card">Clear all</button>
+  <button id="reset" title="Remove every card and mark">Reset</button>
+  <span id="status" role="status"></span>
+</div>
+<div id="middle">
+<aside id="side" aria-labelledby="sideHeading">
+  <h2 id="sideHeading">Materials</h2>
+  <ul id="list"></ul>
+  <p class="empty" id="listEmpty">Nothing open yet.</p>
+</aside>
+<main id="board" aria-label="Workspace board">
+  <div id="canvasArea">
+    <div id="hint">Open an image, or add a whiteboard.<br>Drop files here too. Files stay on this computer.</div>
+  </div>
+</main>
+</div>
+<input type="file" id="fileInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+<script src="workspace-model.js"></script>
+<script src="workspace-ui.js"></script>
+</body>
+</html>

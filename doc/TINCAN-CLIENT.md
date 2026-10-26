@@ -85,5 +85,8 @@ For testing between two homes, a throwaway Toronto server (stock aooserver + Liv
 - Tests: `tests/TinCanBeatClockTest.cpp` (one hour at 113 bpm, every click within one sample; identical clicks for block sizes 1-4096; bars, subdivisions, count-in, tempo changes) and **`TinCanAudioTests`** (`tests/TinCanMetronomeTest.cpp`, a JUCE console test rendering the real click sounds: the default metronome, 4/4 with eighths, count-in and host-synced output all match the expected samples exactly).
 - Checked in the app with the click volume at zero: count-in shows, then beats 1-4 cycle; triplet ticks show. Settings were put back afterwards. **Manual test still to do:** listen to the accent, subdivision and count-in sounds.
 
+### Lesson workspace (T-037)
+*Workspace* tab → *Open the workspace*: a board of images and whiteboards with pen, highlighter, arrows and text, in WebView2. Local only for now; PDFs and sharing wait on two owner decisions. Details, tests and the decisions: [TINCAN-WORKSPACE.md](TINCAN-WORKSPACE.md).
+
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.

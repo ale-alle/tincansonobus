@@ -2885,9 +2885,20 @@ void SonobusAudioProcessorEditor::showToolsWindow(bool show)
     }
     Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
     mToolsWindow = std::make_unique<TinCan::ToolsWindow>(processor, getAudioDeviceManager, [safeThis]() {
+        if (safeThis) safeThis->showWorkspace();
+    }, [safeThis]() {
         // closing destroys the window, which stops the MIDI copy; do it after the click returns
         if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->showToolsWindow(false); });
     });
+}
+
+void SonobusAudioProcessorEditor::showWorkspace()
+{
+    if (!mWorkspaceWindow) {
+        mWorkspaceWindow = std::make_unique<TinCan::WorkspaceWindow>(processor.getCurrentUsername());
+    }
+    mWorkspaceWindow->setVisible(true);
+    mWorkspaceWindow->toFront(true);
 }
 
 void SonobusAudioProcessorEditor::closeLessonVideo()

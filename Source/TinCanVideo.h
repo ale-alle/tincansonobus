@@ -37,6 +37,11 @@ String buildVideoPageURL(const String & page, const VideoInfo & video, const Str
 // true when this build can show video (Windows with WebView2 support compiled in)
 bool isVideoBuild();
 
+#if JUCE_WEB_BROWSER && JUCE_USE_WIN_WEBVIEW2
+// WebView2 settings shared by the video and workspace windows; check areOptionsSupported() before use
+WebBrowserComponent::Options makeWebViewOptions();
+#endif
+
 // A window showing the lesson video. Closing it only hides the video; audio carries on.
 class VideoWindow : public DocumentWindow
 {

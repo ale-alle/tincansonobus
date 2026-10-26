@@ -128,7 +128,9 @@ private:
     HyperlinkButton installLink;
 };
 
-WebBrowserComponent::Options makeBrowserOptions()
+}
+
+WebBrowserComponent::Options makeWebViewOptions()
 {
     auto dataFolder = File::getSpecialLocation(File::userApplicationDataDirectory)
                           .getChildFile("CanDuet").getChildFile("WebView2");
@@ -143,8 +145,6 @@ WebBrowserComponent::Options makeBrowserOptions()
                                     .withStatusBarDisabled());
 }
 
-}
-
 VideoWindow::VideoWindow(const String & title, const VideoInfo & video, const String & displayName,
                          std::function<void()> onClose_)
     : DocumentWindow(title.isNotEmpty() ? title + " - " + TRANS("Video") : TRANS("Lesson video"),
@@ -155,7 +155,7 @@ VideoWindow::VideoWindow(const String & title, const VideoInfo & video, const St
     setResizable(true, false);
     setResizeLimits(320, 240, 10000, 10000);
 
-    auto options = makeBrowserOptions();
+    auto options = makeWebViewOptions();
 
     // JUCE falls back to Internet Explorer when WebView2 can't start, which has no WebRTC
     if (WebBrowserComponent::areOptionsSupported(options)) {
