@@ -30,13 +30,13 @@ Testers need only a zip: no Python, repo or LiveKit secret on their PC. The join
 **Once per server**, from a PC with this repo: create `tickets.env` with one line, `MOCK_TICKETS=<random>=Teacher,<random>=Student` (LF line ending), then:
 ```powershell
 scp scripts\tincan-mock-redeem.py video-page\index.html server\vps\install-test-api.sh tickets.env root@<ip>:/root/canduet-api-setup/   # make the folder first
-ssh root@<ip> "bash /root/canduet-api-setup/install-test-api.sh"   # ends with "join service OK"
+ssh root@<ip> "cd /root/canduet-api-setup && sed -i 's/\r$//' * && bash install-test-api.sh"   # ends with "join service OK"
 ```
 The script restores Caddy's config if the check fails.
 
 **Per tester:** `scripts\make-tester-kit.ps1 -Ticket <ticket> -Role Student -OutDir <folder>` makes a zip with the app, `Join test lesson.bat` and [TESTER-README.txt](TESTER-README.txt). Send it privately (it holds the ticket). Rebuild the kits after rebuilding the app. Windows only: there is no Mac build with video.
 
-To check what each tester sees or change a ticket, edit `tickets.env` and run the script again; the room stays the same.
+To change a ticket, edit `tickets.env`, run the script again and rebuild that kit; the room stays the same.
 
 ### Older method: each PC runs its own mock
 Each PC needs a CanDuet build from this branch (or later), Python 3, and a copy of this repo (for the mock redeem API and `video-page`). Agree a long random room seed and share it privately, e.g. `python -c "import secrets; print(secrets.token_urlsafe(24))"`.
