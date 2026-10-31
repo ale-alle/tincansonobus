@@ -24,6 +24,17 @@ namespace net {
 
 class server;
 
+// Tin Can: when set, peers are told a relay address instead of each other's real addresses
+// (server/relay, doc/TINCAN-RELAY.md). Not set in the app's built-in server.
+struct relay_hook {
+    virtual ~relay_hook() {}
+    virtual bool add_participant(const std::string& group, const std::string& user,
+                                 const ip_address& connection_addr, const ip_address& claimed_public_addr) = 0;
+    virtual void remove_participant(const std::string& group, const std::string& user) = 0;
+    virtual bool relay_address(const std::string& group, const std::string& user, std::string& host, int& port) = 0;
+};
+void set_relay_hook(relay_hook *hook);
+
 struct user;
 using user_list = std::vector<std::shared_ptr<user>>;
 
@@ -40,6 +51,8 @@ public:
     void close(bool notify=true);
 
     bool is_active() const { return socket >= 0; }
+
+    const ip_address& connection_address() const { return addr_; }
 
     void send_message(const char *msg, int32_t);
 

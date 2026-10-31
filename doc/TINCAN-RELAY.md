@@ -1,6 +1,8 @@
 # Lesson audio relay (T-022, D-009 phase 2)
 
-**Status: proposed, awaiting owner approval. Nothing here is built or measured yet.**
+**Status: design approved by the owner 2026-10-31, with the 10 ms limit below, to be tightened later if connections prove stable. First version built (`server/relay`) and tested on one PC with `tests/relay_test.py` and two app copies. Not yet tested on the VPS or between two homes.**
+
+Not built yet: tying relay ports to lesson tickets (known gap below), and lesson rooms still offer the manual "Connect to Other" option.
 
 All lesson audio goes through a relay on the Toronto server. Participants never receive each other's IP addresses, and the relay can't read the audio.
 

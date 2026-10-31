@@ -60,7 +60,8 @@ Both should join "Demo lesson" (audio, encrypted with the shared lesson key) and
 Vultr → the server → **Destroy** (and delete the `rtc`/`turn` DNS records). Optional: take a snapshot first to bring the same server back later (small monthly charge per GB ❓).
 
 ## What this test does and doesn't cover
-- **Audio is still peer-to-peer.** The connection server only introduces the two PCs; audio flows directly between them (encrypted, but each side sees the other's IP). The Tin Can relay (D-009 phase 2, T-022/T-023) isn't built yet — fine for adult friends, not for real students.
+- **Audio depends on the connection server installed.** The stock `aooserver` only introduces the two PCs, so audio goes directly between them and each sees the other's IP. With `canduet-server` (below), audio goes through the relay and neither sees the other's IP. See [TINCAN-RELAY.md](TINCAN-RELAY.md). Relay ports aren't tied to lesson tickets yet, so it isn't ready for real students.
+- **To install the relay:** run `scripts\make-relay-upload.ps1 -OutDir <folder>`, upload the `canduet-relay-setup` folder to `/root/` with `scp -r`, then run `ssh root@<ip> "cd /root/canduet-relay-setup && sed -i 's/\r$//' install-relay.sh && bash install-relay.sh <ip>"`. It should end with `CanDuet relay OK`. To undo: `systemctl disable --now canduet-server; systemctl enable --now aooserver`.
 - **Video** goes through our LiveKit server (SFU), so the two homes never see each other's address for video.
 - The LiveKit API secret stays on the server (the older method puts it on both test PCs); it dies with the server.
 - Not production: one server, no monitoring, no backups, versions pinned in the script (LiveKit `v1.13.9`, Caddy-L4 `v2.11.3`, aooserver `81a4cf9`).

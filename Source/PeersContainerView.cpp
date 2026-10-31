@@ -2152,7 +2152,10 @@ void PeersContainerView::buttonClicked (Button* buttonThatWasClicked)
             String remhost;
             int remport;
             processor.getRemotePeerAddressInfo(i, remhost, remport);
-            processor.addBlockedAddress(remhost);
+            // Tin Can: in a lesson this address is the relay's, so blocking it would block everyone
+            if (!processor.hasLessonKey()) {
+                processor.addBlockedAddress(remhost);
+            }
 
             processor.removeRemotePeer(i, true);
             showSendOptions(di, false);

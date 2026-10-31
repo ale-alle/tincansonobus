@@ -46,14 +46,18 @@ PROBLEMS
   from step 3. If that fails, tell the person who invited you. The test server may be off.
 - Connected, but can't hear the other tester: check "Setup Audio" on both PCs, and that nothing
   is muted. If it still fails, restart CanDuet on both PCs.
-  It may also be a network problem: please report your internet provider and Wi-Fi or cable.
+- "Could not connect with user" appears: take a screenshot, then tell the person who invited you
+  your internet provider and whether you're on Wi-Fi or a cable.
 - Video window says the camera is blocked: close other apps using the camera (Zoom, Teams), then
   check Windows Settings > Privacy & security > Camera. Restart CanDuet.
 - Video window asks you to install WebView2: follow its link, install it, and restart CanDuet.
 - The other tester hears an echo: wear headphones.
 
 PRIVACY
-- The sound goes directly between the two PCs, so each PC can see the other's internet address.
-  It's encrypted. Only test with people you know.
-- The video passes through our test server in Toronto. It's encrypted on the way and isn't recorded.
+- The sound passes through our test server in Toronto, so neither PC sees the other's internet
+  address. It's encrypted so the server can't listen to it, and it isn't recorded.
+- The video also passes through our test server. It's encrypted on the way and isn't recorded,
+  but the server could technically see it. Only test with people you know.
+- CanDuet keeps a short list of connection steps in %APPDATA%\CanDuet\connection-log.txt, with no
+  names or addresses. Please send it if the person who invited you asks.
 - Please don't share this folder: it contains the entry pass for this test.

@@ -395,7 +395,14 @@ void server::on_user_left(user &usr){
     push_event(std::move(e));
 }
 
+static relay_hook *g_relay_hook = nullptr;
+void set_relay_hook(relay_hook *hook) { g_relay_hook = hook; }
+
 void server::on_user_joined_group(user& usr, group& grp){
+    if (g_relay_hook && !g_relay_hook->add_participant(grp.name, usr.name, usr.endpoint->connection_address(), usr.endpoint->public_address)) {
+        LOG_ERROR("aoo_server: no relay port for a new participant");
+    }
+
     // 1) send the new member to existing group members
     // 2) send existing group members to the new member
     for (auto& peer : grp.users()){
@@ -405,11 +412,22 @@ void server::on_user_joined_group(user& usr, group& grp){
             auto notify = [&](client_endpoint* dest, user& u){
                 auto e = u.endpoint;
 
+                std::string public_host = e->public_address.name();
+                std::string local_host = e->local_address.name();
+                int public_port = e->public_address.port();
+                int local_port = e->local_address.port();
+                if (g_relay_hook) {
+                    // never fall back to the real addresses
+                    if (!g_relay_hook->relay_address(grp.name, u.name, public_host, public_port)) return;
+                    local_host = public_host;
+                    local_port = public_port;
+                }
+
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
                 msg << osc::BeginMessage(AOONET_MSG_CLIENT_PEER_JOIN)
                     << grp.name.c_str() << u.name.c_str()
-                    << e->public_address.name().c_str() << e->public_address.port()
-                    << e->local_address.name().c_str() << e->local_address.port()
+                    << public_host.c_str() << public_port
+                    << local_host.c_str() << local_port
                     << e->token
                     << osc::EndMessage;
 
@@ -435,6 +453,8 @@ void server::on_user_joined_group(user& usr, group& grp){
 }
 
 void server::on_user_left_group(user& usr, group& grp){
+    if (g_relay_hook) g_relay_hook->remove_participant(grp.name, usr.name);
+
     // notify group members
     for (auto& peer : grp.users()){
         if (peer.get() != &usr){
