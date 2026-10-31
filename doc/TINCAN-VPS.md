@@ -25,6 +25,20 @@ A short-lived server for testing CanDuet between two homes: the connection serve
 7. From your PC: `curl.exe https://rtc.tincanstudios.ca` → `OK`. If it fails with a certificate error, the DNS records were added after Caddy first tried: `ssh root@<ip> "cd /opt/livekit && docker compose restart caddy"` and try again after a minute.
 
 ## 2. Test between two homes
+Testers need only a zip: no Python, repo or LiveKit secret on their PC. The join service runs on the server.
+
+**Once per server**, from a PC with this repo: create `tickets.env` with one line, `MOCK_TICKETS=<random>=Teacher,<random>=Student` (LF line ending), then:
+```powershell
+scp scripts\tincan-mock-redeem.py video-page\index.html server\vps\install-test-api.sh tickets.env root@<ip>:/root/canduet-api-setup/   # make the folder first
+ssh root@<ip> "bash /root/canduet-api-setup/install-test-api.sh"   # ends with "join service OK"
+```
+The script restores Caddy's config if the check fails.
+
+**Per tester:** `scripts\make-tester-kit.ps1 -Ticket <ticket> -Role Student -OutDir <folder>` makes a zip with the app, `Join test lesson.bat` and [TESTER-README.txt](TESTER-README.txt). Send it privately (it holds the ticket). Rebuild the kits after rebuilding the app. Windows only: there is no Mac build with video.
+
+To check what each tester sees or change a ticket, edit `tickets.env` and run the script again; the room stays the same.
+
+### Older method: each PC runs its own mock
 Each PC needs a CanDuet build from this branch (or later), Python 3, and a copy of this repo (for the mock redeem API and `video-page`). Agree a long random room seed and share it privately, e.g. `python -c "import secrets; print(secrets.token_urlsafe(24))"`.
 
 On **each** PC (PowerShell):
@@ -48,7 +62,7 @@ Vultr → the server → **Destroy** (and delete the `rtc`/`turn` DNS records). 
 ## What this test does and doesn't cover
 - **Audio is still peer-to-peer.** The connection server only introduces the two PCs; audio flows directly between them (encrypted, but each side sees the other's IP). The Tin Can relay (D-009 phase 2, T-022/T-023) isn't built yet — fine for adult friends, not for real students.
 - **Video** goes through our LiveKit server (SFU), so the two homes never see each other's address for video.
-- The LiveKit API secret is on both test PCs; it dies with the server.
+- The LiveKit API secret stays on the server (the older method puts it on both test PCs); it dies with the server.
 - Not production: one server, no monitoring, no backups, versions pinned in the script (LiveKit `v1.13.9`, Caddy-L4 `v2.11.3`, aooserver `81a4cf9`).
 
 ## Troubleshooting
