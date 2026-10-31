@@ -3681,8 +3681,12 @@ void SonobusAudioProcessorEditor::updateState(bool rebuildInputChannels)
     else {
         mConnectButton->setButtonText(TRANS("Connect..."));
         mConnectButton->setToggleState(false, dontSendNotification);
-        
-        mPeerContainer->resetPendingUsers();
+
+        // Tin Can: the server sends existing members before its "joined" reply, so a person can be
+        // pending while we're connected with no group yet; leaving a group clears them separately
+        if (!currConnected) {
+            mPeerContainer->resetPendingUsers();
+        }
     }
 
     if (mRecordingButton) {
@@ -4162,6 +4166,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
         }
         else if (ev.type == ClientEvent::PeerPendingJoinEvent) {
             mPeerContainer->peerPendingJoin(ev.group, ev.user);
+            updateState(false); // clears "Waiting for the other person..." now someone is connecting
         }
         else if (ev.type == ClientEvent::PeerFailedJoinEvent) {
             mPeerContainer->peerFailedJoin(ev.group, ev.user);

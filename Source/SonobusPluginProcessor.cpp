@@ -377,6 +377,20 @@ struct SonobusAudioProcessor::RemotePeer {
 
 // Tin Can: with a lesson key set, every packet except those addressed to the
 // connection server (/aoo/server/...) is sealed. Returns false if it must not be sent.
+// Tin Can: connection steps for test support, in %APPDATA%\CanDuet\connection-log.txt. Never holds
+// names, addresses, tickets or keys. Starts over when it passes 256 KB.
+static void tincan_log(const String & text)
+{
+    static CriticalSection lock;
+    const ScopedLock sl(lock);
+
+    auto file = File::getSpecialLocation(File::userApplicationDataDirectory)
+                    .getChildFile("CanDuet").getChildFile("connection-log.txt");
+    file.getParentDirectory().createDirectory();
+    if (file.getSize() > 256 * 1024) file.deleteFile();
+    file.appendText(Time::getCurrentTime().toISO8601(true) + " " + text + "\n");
+}
+
 static bool tincan_seal_if_needed(SonobusAudioProcessor::EndpointState * endpoint, const char *& data, int32_t & size, char * sealbuf, int sealcap)
 {
     if (!endpoint->cipher || !endpoint->cipher->hasKey()) return true;
@@ -4257,6 +4271,8 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
         {
             aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
 
+            tincan_log(e->result > 0 ? "server connected" : "server connect failed");
+
             if (e->result > 0){
                 DBG("Connected to server!");
                 mIsConnectedToServer = true;
@@ -4293,6 +4309,7 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
         case AOONET_CLIENT_DISCONNECT_EVENT:
         {
             aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            tincan_log("server disconnected");
             if (e->result == 0){
                 DBG("Disconnected from server - " << String::fromUTF8(e->errormsg));
                 
@@ -4318,6 +4335,7 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
         case AOONET_CLIENT_GROUP_JOIN_EVENT:
         {
             aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            tincan_log(e->result > 0 ? "room joined" : "room join failed");
             if (e->result > 0){
                 DBG("Joined group - " << e->name);
                 const ScopedLock sl (mClientLock);        
@@ -4392,6 +4410,7 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
             
             if (e->result > 0){
                 DBG("Peer attempting to join group " <<  e->group << " - user " << e->user);
+                tincan_log("participant introduced by server, connecting");
                 
                 clientListeners.call(&SonobusAudioProcessor::ClientListener::aooClientPeerPendingJoin, this, CharPointer_UTF8 (e->group), CharPointer_UTF8 (e->user));
                 
@@ -4407,6 +4426,7 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
 
             if (e->result > 0){
                 DBG("Peer joined group " <<  e->group << " - user " << e->user);
+                tincan_log("participant connected");
 
                 EndpointState * endpoint = findOrAddRawEndpoint(e->address);
                 if (endpoint) {
@@ -4446,6 +4466,7 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
             
             if (e->result > 0){
                 DBG("Peer failed to join group " <<  e->group << " - user " << e->user);
+                tincan_log("participant connection failed; packets rejected by encryption: " + String((int64) getDroppedCipherPacketCount()));
                 
                 clientListeners.call(&SonobusAudioProcessor::ClientListener::aooClientPeerJoinFailed, this, CharPointer_UTF8 (e->group), CharPointer_UTF8 (e->user));
                 
@@ -4462,6 +4483,7 @@ int32_t SonobusAudioProcessor::handleClientEvents(const aoo_event ** events, int
             if (e->result > 0){
 
                 DBG("Peer leave group " <<  e->group << " - user " << e->user);
+                tincan_log("participant left");
 
                 EndpointState * endpoint = findOrAddRawEndpoint(e->address);
                 if (endpoint) {

@@ -318,6 +318,15 @@ void PeersContainerView::resized()
         updateLayout();
     }
 
+    // Tin Can: rows for people still connecting, or who couldn't connect, sit above the grid.
+    // Without bounds of their own these rows never appear, leaving the area blank.
+    const int pendingRowHeight = 64;
+    for (auto * ppvf : mPendingPeerViews) {
+        ppvf->setBounds(bounds.removeFromTop(pendingRowHeight));
+        ppvf->resized();
+        bounds.removeFromTop(4);
+    }
+
     // --- Begin Grid Layout ---
     int numPeers = mPeerViews.size();
     if (numPeers == 0)
