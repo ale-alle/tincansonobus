@@ -58,7 +58,7 @@ String RecordingMessage::toJSON() const
         obj->setProperty("label", label);
         obj->setProperty("ago", ago);
     }
-    if (type == Start) {
+    if (type == Start || type == Alive) {
         Array<var> names;
         for (auto & n : people) names.add(n);
         obj->setProperty("people", names);
@@ -89,8 +89,9 @@ RecordingMessage RecordingMessage::parse(const String & json)
         m.type = Answer;
         m.ok = (bool) ok;
     }
-    else if (t == "start") {
+    else if (t == "start" || t == "alive") {
         auto names = v.getProperty("people", var());
+        if (names.isVoid() && t == "alive") names = Array<var>();  // older alive without the list
         if (!names.isArray() || names.size() > kMaxPeople) return bad;
         for (auto & n : *names.getArray()) {
             if (!n.isString()) return bad;
@@ -98,7 +99,7 @@ RecordingMessage RecordingMessage::parse(const String & json)
             if (name.isEmpty()) return bad;
             m.people.addIfNotAlreadyThere(name);
         }
-        m.type = Start;
+        m.type = t == "start" ? Start : Alive;
     }
     else if (t == "mark") {
         auto label = v.getProperty("label", var());
@@ -111,7 +112,6 @@ RecordingMessage RecordingMessage::parse(const String & json)
         m.ago = a;
     }
     else if (t == "stop") m.type = Stop;
-    else if (t == "alive") m.type = Alive;
     else return bad;
 
     return m;
@@ -295,10 +295,16 @@ RecordingConsent::Result RecordingConsent::receive(const String & from, const Re
             }
             else if (phase == Phase::Agreed && m.id == id && from == asker) {
                 // we agreed and they are recording, but their Start got lost: start now
-                people = StringArray(asker, me);
+                people = m.people;
+                people.addIfNotAlreadyThere(asker);
+                people.addIfNotAlreadyThere(me);
                 beginRecording();
                 r.action = Action::StartRecording;
                 r.who = from;
+            }
+            else if (phase == Phase::Agreed && m.id == id) {
+                // someone else in the group is already recording what we agreed to; the asker's
+                // Start or alive will follow, so don't end it for everyone
             }
             else {
                 // we aren't part of that recording (any more): tell them
@@ -389,7 +395,7 @@ RecordingConsent::Result RecordingConsent::tick()
         }
         if (now - lastAliveSent >= kAliveEvery) {
             lastAliveSent = now;
-            r.out.add(RecordingMessage::alive(id));
+            r.out.add(RecordingMessage::alive(id, people));
         }
     }
     else if ((phase == Phase::Asked || phase == Phase::Agreed) && now - phaseSince > kQuestionTimeout) {

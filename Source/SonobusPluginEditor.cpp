@@ -1054,7 +1054,10 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
         mMarkButton->setTooltip(TRANS("Mark this moment as a highlight of the recording"));
         mMarkButton->setColour(TextButton::buttonColourId, Colour(0xff6b3a14));
         mMarkButton->onClick = [this]() { markPressed(); };
-        mRecordingTicker.onTick = [this]() { applyRecording(mRecordingConsent.tick(), RecordingCause::Timer); };
+        mRecordingTicker.onTick = [this]() {
+            handleRecordingMessages();  // count anything already queued before judging silence
+            applyRecording(mRecordingConsent.tick(), RecordingCause::Timer);
+        };
         mRecordingTicker.startTimer(1000);
 
         mFileRecordingLabel = std::make_unique<Label>("rectime", "");
@@ -1402,7 +1405,10 @@ SonobusAudioProcessorEditor::~SonobusAudioProcessorEditor()
 {
     mRecordingTicker.stopTimer();
     if (mRecordingConsent.isRecording() && processor.isRecordingToFile()) {
+        const bool withOthers = mRecordingConsent.getPeople().size() > 1;
         saveLessonSummary(processor.getElapsedRecordTime(), false);
+        // the others stop when they get our Stop; in a plugin host the processor would otherwise keep going
+        if (withOthers) processor.stopRecordingToFile();
     }
     // quitting while recording or asking: tell the others (they also notice us leaving)
     sendRecordingMessages(mRecordingConsent.stop());

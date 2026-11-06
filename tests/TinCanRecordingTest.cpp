@@ -56,7 +56,9 @@ static void testMessages()
     CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"mark\",\"id\":\"abcdefgh12\",\"label\":\"x\",\"ago\":-1}").type == RecordingMessage::Invalid);
     CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"launch\",\"id\":\"abcdefgh12\"}").type == RecordingMessage::Invalid);
     CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"request\",\"id\":\"abcdefgh12\"}").type == RecordingMessage::Request);
-    CHECK(RecordingMessage::parse(RecordingMessage::alive(id).toJSON()).type == RecordingMessage::Alive);
+    auto al = RecordingMessage::parse(RecordingMessage::alive(id, StringArray("Alex", "Sam")).toJSON());
+    CHECK(al.type == RecordingMessage::Alive && al.people.size() == 2);
+    CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"alive\",\"id\":\"abcdefgh12\"}").type == RecordingMessage::Alive);
 }
 
 static void testOneToOne()
@@ -259,10 +261,30 @@ static void testReliability()
     {
         // someone not in the recording sends Alive: ignored; an Alive for another id gets a Stop back
         Pair p("oooooooo88");
-        CHECK(p.teacher.receive("Mallory", RecordingMessage::alive("oooooooo88")).out.isEmpty());
-        auto r = p.teacher.receive("Sam", RecordingMessage::alive("pppppppp99"));
+        CHECK(p.teacher.receive("Mallory", RecordingMessage::alive("oooooooo88", {})).out.isEmpty());
+        auto r = p.teacher.receive("Sam", RecordingMessage::alive("pppppppp99", {}));
         CHECK(r.out.size() == 1 && r.out[0].type == RecordingMessage::Stop && p.teacher.isRecording());
     }
+}
+
+static void testGroupLostStart()
+{
+    // group of three: A's Start to Jo is lost, and Sam's alive reaches Jo first
+    double now = 0.0;
+    RecordingConsent t, s1, s2;
+    for (auto * c : { &t, &s1, &s2 }) c->clock = [&]() { return now; };
+    t.setName("Alex"); s1.setName("Sam"); s2.setName("Jo");
+    deliver(t.ask(StringArray("Sam", "Jo"), "qqqqqqqq11"), "Alex", { &s1, &s2 });
+    deliver(s1.answer(true), "Sam", { &t });
+    auto start = deliver(s2.answer(true), "Jo", { &t });
+    deliver(start[0], "Alex", { &s1 });            // Jo never gets it
+    CHECK(t.isRecording() && s1.isRecording() && s2.getPhase() == Phase::Agreed);
+    now += RecordingConsent::kAliveEvery;
+    auto fromSam = deliver(s1.tick(), "Sam", { &s2 });
+    CHECK(fromSam[0].out.isEmpty() && s2.getPhase() == Phase::Agreed);  // no Stop for everyone
+    auto fromAlex = deliver(t.tick(), "Alex", { &s2 });
+    CHECK(fromAlex[0].action == Action::StartRecording && s2.isRecording());
+    CHECK(s2.getPeople().size() == 3);             // the full list came with the alive
 }
 
 static void testSummaries()
@@ -319,6 +341,7 @@ int runRecordingTests()
     testOneToOne();
     testDeclineAndEdgeCases();
     testReliability();
+    testGroupLostStart();
     testSummaries();
     std::printf("  recording consent and summaries: %s\n", failures == 0 ? "ok" : "FAILED");
     return failures;

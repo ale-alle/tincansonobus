@@ -33,7 +33,7 @@ struct RecordingMessage
     bool ok = false;    // Answer only
     String label;       // Mark only, at most kMaxLabel characters
     double ago = 0.0;   // Mark only: seconds between pressing Mark and sending it (0-600)
-    StringArray people; // Start only: everyone who agreed (at most kMaxPeople names)
+    StringArray people; // Start (required) and Alive: everyone who agreed (at most kMaxPeople names)
 
     static constexpr int kMaxLabel = 80;
     static constexpr int kMaxPeople = 16;
@@ -48,7 +48,7 @@ struct RecordingMessage
     static RecordingMessage mark(const String & id, const String & label, double ago);
     static RecordingMessage stop(const String & id) { RecordingMessage m; m.type = Stop; m.id = id; return m; }
     // sent every kAliveEvery seconds while recording; anyone not recording that id answers Stop
-    static RecordingMessage alive(const String & id) { RecordingMessage m; m.type = Alive; m.id = id; return m; }
+    static RecordingMessage alive(const String & id, const StringArray & people) { RecordingMessage m; m.type = Alive; m.id = id; m.people = people; return m; }
 };
 
 // a random request id
