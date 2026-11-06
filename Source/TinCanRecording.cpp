@@ -15,6 +15,7 @@ static const char * typeName(RecordingMessage::Type t)
         case RecordingMessage::Start:   return "start";
         case RecordingMessage::Mark:    return "mark";
         case RecordingMessage::Stop:    return "stop";
+        case RecordingMessage::Alive:   return "alive";
         default:                        return "";
     }
 }
@@ -110,6 +111,7 @@ RecordingMessage RecordingMessage::parse(const String & json)
         m.ago = a;
     }
     else if (t == "stop") m.type = Stop;
+    else if (t == "alive") m.type = Alive;
     else return bad;
 
     return m;
@@ -127,9 +129,26 @@ String makeRecordingId()
 
 //==============================================================================
 
+void RecordingConsent::setPhase(Phase p)
+{
+    phase = p;
+    phaseSince = clock();
+}
+
+void RecordingConsent::beginRecording()
+{
+    setPhase(Phase::Recording);
+    lastAliveSent = phaseSince;
+    lastHeard.clear();
+    for (auto & p : people) {
+        if (p != me) lastHeard[p] = phaseSince;
+    }
+}
+
 void RecordingConsent::reset()
 {
-    phase = Phase::Idle;
+    setPhase(Phase::Idle);
+    lastHeard.clear();
     id.clear();
     asker.clear();
     waitingFor.clear();
@@ -140,7 +159,7 @@ RecordingConsent::Result RecordingConsent::startIfAllAgreed()
 {
     Result r;
     if (phase != Phase::Asking || !waitingFor.isEmpty()) return r;
-    phase = Phase::Recording;
+    beginRecording();
     r.action = Action::StartRecording;
     r.who = me;
     r.out.add(RecordingMessage::start(id, people));
@@ -162,13 +181,13 @@ RecordingConsent::Result RecordingConsent::ask(const StringArray & others, const
 
     if (waitingFor.isEmpty()) {
         // practising alone: nobody else to ask
-        phase = Phase::Recording;
+        beginRecording();
         r.action = Action::StartRecording;
         r.who = me;
         return r;
     }
 
-    phase = Phase::Asking;
+    setPhase(Phase::Asking);
     r.out.add(RecordingMessage::request(id));
     return r;
 }
@@ -178,7 +197,7 @@ RecordingConsent::Result RecordingConsent::answer(bool ok)
     Result r;
     if (phase != Phase::Asked) return r;
     r.out.add(RecordingMessage::answer(id, ok));
-    if (ok) phase = Phase::Agreed;
+    if (ok) setPhase(Phase::Agreed);
     else reset();
     return r;
 }
@@ -223,18 +242,22 @@ RecordingConsent::Result RecordingConsent::receive(const String & from, const Re
 
     switch (m.type) {
         case RecordingMessage::Request:
-            if (phase == Phase::Idle) {
-                phase = Phase::Asked;
+            if (phase == Phase::Idle
+                || ((phase == Phase::Asked || phase == Phase::Agreed) && from == asker && m.id != id)) {
+                // a new question, or the same person asking again (their earlier one may have got lost)
+                setPhase(Phase::Asked);
                 id = m.id;
                 asker = from;
                 r.action = Action::ShowQuestion;
                 r.who = from;
             }
             else if (phase == Phase::Asking && m.id.compare(id) < 0) {
-                // we both pressed Record: the smaller id wins, and we already want to record
+                // we both pressed Record: the smaller id wins, and we already want to record.
+                // Anyone who already agreed to our request is told it's off.
+                r.out.add(RecordingMessage::stop(id));
                 waitingFor.clear();
                 people.clear();
-                phase = Phase::Agreed;
+                setPhase(Phase::Agreed);
                 id = m.id;
                 asker = from;
                 r.out.add(RecordingMessage::answer(id, true));
@@ -257,12 +280,29 @@ RecordingConsent::Result RecordingConsent::receive(const String & from, const Re
 
         case RecordingMessage::Start:
             if (phase == Phase::Agreed && m.id == id && from == asker) {
-                phase = Phase::Recording;
                 people = m.people;
                 people.addIfNotAlreadyThere(asker);
                 people.addIfNotAlreadyThere(me);
+                beginRecording();
                 r.action = Action::StartRecording;
                 r.who = from;
+            }
+            break;
+
+        case RecordingMessage::Alive:
+            if (phase == Phase::Recording && m.id == id) {
+                if (people.contains(from)) lastHeard[from] = clock();
+            }
+            else if (phase == Phase::Agreed && m.id == id && from == asker) {
+                // we agreed and they are recording, but their Start got lost: start now
+                people = StringArray(asker, me);
+                beginRecording();
+                r.action = Action::StartRecording;
+                r.who = from;
+            }
+            else {
+                // we aren't part of that recording (any more): tell them
+                r.out.add(RecordingMessage::stop(m.id));
             }
             break;
 
@@ -305,7 +345,14 @@ RecordingConsent::Result RecordingConsent::receive(const String & from, const Re
 RecordingConsent::Result RecordingConsent::peerLeft(const String & name)
 {
     Result r;
-    if (phase == Phase::Asking && waitingFor.contains(name)) {
+    if (phase == Phase::Recording && people.contains(name) && name != me) {
+        // their copy has stopped; recording them again needs a new yes from them
+        r.action = Action::StopRecording;
+        r.who = name;
+        r.out.add(RecordingMessage::stop(id));   // for anyone else still in the lesson
+        reset();
+    }
+    else if (phase == Phase::Asking && waitingFor.contains(name)) {
         waitingFor.removeString(name);
         if (people.size() > 1) return startIfAllAgreed();
         if (waitingFor.isEmpty()) {
@@ -318,6 +365,37 @@ RecordingConsent::Result RecordingConsent::peerLeft(const String & name)
     else if ((phase == Phase::Asked || phase == Phase::Agreed) && name == asker) {
         r.action = Action::Cancelled;
         r.who = name;
+        reset();
+    }
+    return r;
+}
+
+RecordingConsent::Result RecordingConsent::tick()
+{
+    Result r;
+    const double now = clock();
+
+    if (phase == Phase::Recording && people.size() > 1) {
+        for (auto & p : people) {
+            if (p == me) continue;
+            auto it = lastHeard.find(p);
+            if (it == lastHeard.end() || now - it->second > kLostAfter) {
+                r.action = Action::ConnectionLost;
+                r.who = p;
+                r.out.add(RecordingMessage::stop(id));
+                reset();
+                return r;
+            }
+        }
+        if (now - lastAliveSent >= kAliveEvery) {
+            lastAliveSent = now;
+            r.out.add(RecordingMessage::alive(id));
+        }
+    }
+    else if ((phase == Phase::Asked || phase == Phase::Agreed) && now - phaseSince > kQuestionTimeout) {
+        // the asker's start or cancel never arrived
+        r.action = Action::Cancelled;
+        r.who = asker;
         reset();
     }
     return r;

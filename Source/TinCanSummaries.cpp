@@ -228,17 +228,28 @@ void SummariesPanel::deleteSelected()
     auto audio = s->getAudioFile();
 
     Component::SafePointer<SummariesPanel> safeThis(this);
-    AlertWindow::showOkCancelBox(MessageBoxIconType::WarningIcon, TRANS("Delete this recording?"),
-                                 TRANS("This moves the recording and its highlights to the Recycle Bin. "
-                                       "Other people's copies are not affected."),
-                                 TRANS("Delete"), TRANS("Cancel"), this,
-                                 ModalCallbackFunction::create([safeThis, summaryFile, audio](int ok) {
+    // a plain AlertWindow: its buttons are real buttons for screen readers (the OK/Cancel box's aren't)
+    auto * confirm = new AlertWindow(TRANS("Delete this recording?"),
+                                     TRANS("This moves the recording and its highlights to the Recycle Bin. "
+                                           "Other people's copies are not affected."),
+                                     MessageBoxIconType::WarningIcon, this);
+    confirm->addButton(TRANS("Delete"), 1);
+    confirm->addButton(TRANS("Cancel"), 0, KeyPress(KeyPress::escapeKey));
+    confirm->enterModalState(true, ModalCallbackFunction::create([safeThis, summaryFile, audio](int ok) {
         if (ok != 1 || !safeThis) return;  // 1 = Delete
         if (safeThis->hooks.stop) safeThis->hooks.stop();
-        if (audio.existsAsFile()) audio.moveToTrash();
+        if (safeThis->hooks.unload) safeThis->hooks.unload(audio);
+        // keep the highlights unless the recording really went: never leave a recording without its summary
+        if (audio.existsAsFile() && !audio.moveToTrash()) {
+            AlertWindow::showMessageBoxAsync(MessageBoxIconType::WarningIcon, TRANS("Couldn't delete the recording"),
+                                             TRANS("The recording file is in use or can't be moved to the Recycle Bin. Close other apps using it and try again."),
+                                             TRANS("OK"), safeThis.getComponent());
+            safeThis->refresh();
+            return;
+        }
         summaryFile.moveToTrash();
         safeThis->refresh();
-    }));
+    }), true);  // deleted when dismissed
 }
 
 void SummariesPanel::visibilityChanged()

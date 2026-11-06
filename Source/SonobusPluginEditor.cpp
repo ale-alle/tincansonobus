@@ -1054,6 +1054,8 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
         mMarkButton->setTooltip(TRANS("Mark this moment as a highlight of the recording"));
         mMarkButton->setColour(TextButton::buttonColourId, Colour(0xff6b3a14));
         mMarkButton->onClick = [this]() { markPressed(); };
+        mRecordingTicker.onTick = [this]() { applyRecording(mRecordingConsent.tick(), RecordingCause::Timer); };
+        mRecordingTicker.startTimer(1000);
 
         mFileRecordingLabel = std::make_unique<Label>("rectime", "");
         mFileRecordingLabel->setJustificationType(Justification::centredBottom);
@@ -1398,9 +1400,12 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 
 SonobusAudioProcessorEditor::~SonobusAudioProcessorEditor()
 {
+    mRecordingTicker.stopTimer();
     if (mRecordingConsent.isRecording() && processor.isRecordingToFile()) {
         saveLessonSummary(processor.getElapsedRecordTime(), false);
     }
+    // quitting while recording or asking: tell the others (they also notice us leaving)
+    sendRecordingMessages(mRecordingConsent.stop());
     mRecordQuestion.reset();
 
     if (menuBarModel) {
@@ -3082,15 +3087,18 @@ void SonobusAudioProcessorEditor::handleRecordingMessages()
     mRecordingConsent.setName(getMyLessonName());
     for (int i = 0; i < from.size(); ++i) {
         auto m = TinCan::RecordingMessage::parse(json[i]);
-        logRecording("received type " + String((int) m.type) + " phase " + phaseName(mRecordingConsent.getPhase()));
-        applyRecording(mRecordingConsent.receive(from[i], TinCan::RecordingMessage::parse(json[i])), RecordingCause::Remote);
+        if (m.type != TinCan::RecordingMessage::Alive)
+            logRecording("received type " + String((int) m.type) + " phase " + phaseName(mRecordingConsent.getPhase()));
+        applyRecording(mRecordingConsent.receive(from[i], m), RecordingCause::Remote);
     }
 }
 
 void SonobusAudioProcessorEditor::applyRecording(const TinCan::RecordingConsent::Result & r, RecordingCause cause)
 {
     using Action = TinCan::RecordingConsent::Action;
-    if (r.action != Action::None || !r.out.isEmpty()) {
+    bool onlyAlive = r.action == Action::None && !r.out.isEmpty();
+    for (auto & m : r.out) onlyAlive = onlyAlive && m.type == TinCan::RecordingMessage::Alive;
+    if ((r.action != Action::None || !r.out.isEmpty()) && !onlyAlive) {
         String sent;
         for (auto & m : r.out) sent << (int) m.type << " ";
         logRecording("action " + String((int) r.action) + " cause " + String((int) cause) + " phase " + phaseName(mRecordingConsent.getPhase())
@@ -3141,10 +3149,18 @@ void SonobusAudioProcessorEditor::applyRecording(const TinCan::RecordingConsent:
 
         case Action::StopRecording:
             stopLocalRecording();
-            if (cause == RecordingCause::Joined)
+            if (cause == RecordingCause::Left)
+                showPopTip(r.who + " " + TRANS("left, so the recording stopped. Your copy and its highlights are saved."), 7000, mRecordingButton.get(), 220);
+            else if (cause == RecordingCause::Joined)
                 showPopTip(TRANS("Recording stopped because") + " " + r.who + " " + TRANS("joined. Press Record to ask everyone again."), 7000, mRecordingButton.get(), 220);
             else if (cause == RecordingCause::Remote)
                 showPopTip(r.who + " " + TRANS("stopped the recording. Your copy and its highlights are in Tools > Summaries."), 6000, mRecordingButton.get(), 220);
+            break;
+
+        case Action::ConnectionLost:
+            stopLocalRecording();
+            showPopTip(TRANS("Recording stopped: lost contact with") + " " + r.who + ". " + TRANS("Your copy and its highlights are saved."),
+                       7000, mRecordingButton.get(), 220);
             break;
 
         case Action::AddMark: {
@@ -3173,11 +3189,11 @@ void SonobusAudioProcessorEditor::showRecordQuestion(const String & who)
     mRecordQuestion->addButton(TRANS("Not now"), 0, KeyPress(KeyPress::escapeKey));
 
     Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
-    auto * window = mRecordQuestion.get();
-    window->enterModalState(true, ModalCallbackFunction::create([safeThis, window](int result) {
+    const int generation = ++mRecordQuestionGeneration;
+    mRecordQuestion->enterModalState(true, ModalCallbackFunction::create([safeThis, generation](int result) {
         // the window can't be deleted inside its own callback
-        MessageManager::callAsync([safeThis, window, result]() {
-            if (!safeThis || safeThis->mRecordQuestion.get() != window) return;
+        MessageManager::callAsync([safeThis, generation, result]() {
+            if (!safeThis || safeThis->mRecordQuestionGeneration != generation) return;
             safeThis->mRecordQuestion.reset();
             if (result >= 0 && safeThis->mRecordingConsent.getPhase() == TinCan::RecordingConsent::Phase::Asked) {
                 safeThis->applyRecording(safeThis->mRecordingConsent.answer(result == 1), RecordingCause::Local);
@@ -3232,7 +3248,8 @@ void SonobusAudioProcessorEditor::saveLessonSummary(double durationSeconds, bool
     mRecordingPeople.clear();
     mRecordingStarted = Time();
 
-    if (showIt) {
+    // after a lesson recording; solo practice recordings just appear in the tab
+    if (showIt && summary.people.size() > 1) {
         showToolsWindow(true);
         if (mToolsWindow) mToolsWindow->showSummary(file);
     }
@@ -3251,6 +3268,13 @@ TinCan::SummaryHooks SonobusAudioProcessorEditor::makeSummaryHooks()
         transport.setPosition(jlimit(0.0, jmax(0.0, transport.getLengthInSeconds()), seconds));
         transport.start();
         safeThis->updateTransportState();
+    };
+    hooks.unload = [safeThis](const File & audio) {
+        if (!safeThis || !safeThis->mCurrentAudioFile.isLocalFile() || safeThis->mCurrentAudioFile.getLocalFile() != audio) return;
+        safeThis->processor.getTransportSource().stop();
+        safeThis->loadAudioFromURL(URL());   // same as the player's own dismiss button
+        safeThis->updateLayout();
+        safeThis->resized();
     };
     hooks.stop = [safeThis]() {
         if (!safeThis) return;

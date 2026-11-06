@@ -56,6 +56,7 @@ static void testMessages()
     CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"mark\",\"id\":\"abcdefgh12\",\"label\":\"x\",\"ago\":-1}").type == RecordingMessage::Invalid);
     CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"launch\",\"id\":\"abcdefgh12\"}").type == RecordingMessage::Invalid);
     CHECK(RecordingMessage::parse("{\"v\":1,\"t\":\"request\",\"id\":\"abcdefgh12\"}").type == RecordingMessage::Request);
+    CHECK(RecordingMessage::parse(RecordingMessage::alive(id).toJSON()).type == RecordingMessage::Alive);
 }
 
 static void testOneToOne()
@@ -129,7 +130,6 @@ static void testDeclineAndEdgeCases()
         auto got = deliver(teacher.ask(StringArray("Sam"), "eeeeeeee55"), "Alex", { &student });
         got = deliver(student.answer(true), "Sam", { &teacher });
         deliver(got[0], "Alex", { &student });
-        CHECK(teacher.peerJoined("Sam").action == Action::None);  // reconnecting after a drop is fine
         auto r = teacher.peerJoined("Jo");
         CHECK(r.action == Action::StopRecording && r.who == "Jo" && !teacher.isRecording());
         got = deliver(r, "Alex", { &student });
@@ -150,12 +150,13 @@ static void testDeclineAndEdgeCases()
         auto ra = a.ask(StringArray("Sam"), "aaaaaaaa00");
         auto rb = b.ask(StringArray("Alex"), "bbbbbbbb00");
         auto atB = deliver(ra, "Alex", { &b });   // b yields, answers yes
-        CHECK(atB[0].action == Action::None && b.getPhase() == Phase::Agreed && atB[0].out.size() == 1);
+        // b drops its own request (telling anyone who agreed to it) and says yes
+        CHECK(atB[0].action == Action::None && b.getPhase() == Phase::Agreed && atB[0].out.size() == 2);
         auto atA = deliver(rb, "Sam", { &a });    // a ignores b's request
         CHECK(atA[0].action == Action::None && a.getPhase() == Phase::Asking);
         atA = deliver(atB[0], "Sam", { &a });
-        CHECK(atA[0].action == Action::StartRecording);
-        atB = deliver(atA[0], "Alex", { &b });
+        CHECK(atA[0].action == Action::None && atA[1].action == Action::StartRecording);  // Stop for b's id is ignored
+        atB = deliver(atA[1], "Alex", { &b });
         CHECK(atB[0].action == Action::StartRecording && a.isRecording() && b.isRecording());
     }
     {
@@ -170,6 +171,97 @@ static void testDeclineAndEdgeCases()
         CHECK(got[0].action == Action::StartRecording);
         deliver(got[0], "Alex", { &s1, &s2 });
         CHECK(s1.isRecording() && s2.isRecording() && s2.getPeople().size() == 3);
+    }
+}
+
+// two people recording, both on a fake clock
+struct Pair
+{
+    double now = 1000.0;
+    RecordingConsent teacher, student;
+    Pair(const String & id)
+    {
+        teacher.clock = [this]() { return now; };
+        student.clock = [this]() { return now; };
+        teacher.setName("Alex"); student.setName("Sam");
+        auto got = deliver(teacher.ask(StringArray("Sam"), id), "Alex", { &student });
+        got = deliver(student.answer(true), "Sam", { &teacher });
+        deliver(got[0], "Alex", { &student });
+    }
+};
+
+static void testReliability()
+{
+    {
+        // leaving stops it: coming back under the same name needs a new yes
+        Pair p("hhhhhhhh11");
+        CHECK(p.teacher.isRecording() && p.student.isRecording());
+        auto r = p.teacher.peerLeft("Sam");
+        CHECK(r.action == Action::StopRecording && r.who == "Sam" && !p.teacher.isRecording());
+        CHECK(p.teacher.peerJoined("Sam").action == Action::None);  // nothing left to stop
+        CHECK(p.teacher.getPhase() == Phase::Idle);
+    }
+    {
+        // a lost Stop: the side still recording finds out from its next Alive
+        Pair p("iiiiiiii22");
+        p.student.stop();                  // its Stop message never arrives
+        CHECK(p.teacher.isRecording());
+        p.now += RecordingConsent::kAliveEvery;
+        auto tick = p.teacher.tick();
+        CHECK(tick.out.size() == 1 && tick.out[0].type == RecordingMessage::Alive);
+        auto atStudent = deliver(tick, "Alex", { &p.student });
+        CHECK(atStudent[0].out.size() == 1 && atStudent[0].out[0].type == RecordingMessage::Stop);
+        auto atTeacher = deliver(atStudent[0], "Sam", { &p.teacher });
+        CHECK(atTeacher[0].action == Action::StopRecording && !p.teacher.isRecording());
+    }
+    {
+        // Alive keeps it going; silence for kLostAfter stops it
+        Pair p("jjjjjjjj33");
+        for (int i = 0; i < 6; ++i) {
+            p.now += RecordingConsent::kAliveEvery;
+            deliver(p.student.tick(), "Sam", { &p.teacher });
+            deliver(p.teacher.tick(), "Alex", { &p.student });
+        }
+        CHECK(p.teacher.isRecording() && p.student.isRecording());
+        p.now += RecordingConsent::kLostAfter + 1.0;   // the student's PC goes quiet
+        auto r = p.teacher.tick();
+        CHECK(r.action == Action::ConnectionLost && r.who == "Sam" && !p.teacher.isRecording());
+    }
+    {
+        // a lost Start: the agreed side starts when the first Alive arrives
+        double now = 0.0;
+        RecordingConsent teacher, student;
+        teacher.clock = [&]() { return now; };
+        student.clock = [&]() { return now; };
+        teacher.setName("Alex"); student.setName("Sam");
+        deliver(teacher.ask(StringArray("Sam"), "kkkkkkkk44"), "Alex", { &student });
+        deliver(student.answer(true), "Sam", { &teacher });  // its Start is lost
+        CHECK(teacher.isRecording() && student.getPhase() == Phase::Agreed);
+        now += RecordingConsent::kAliveEvery;
+        auto got = deliver(teacher.tick(), "Alex", { &student });
+        CHECK(got[0].action == Action::StartRecording && student.isRecording());
+    }
+    {
+        // a question whose follow-up never comes ends on its own, and doesn't block the next one
+        double now = 0.0;
+        RecordingConsent student;
+        student.clock = [&]() { return now; };
+        student.setName("Sam");
+        CHECK(student.receive("Alex", RecordingMessage::request("llllllll55")).action == Action::ShowQuestion);
+        student.answer(true);
+        // the asker asks again with a new id (their first attempt went wrong): shown again
+        CHECK(student.receive("Alex", RecordingMessage::request("mmmmmmmm66")).action == Action::ShowQuestion);
+        now += RecordingConsent::kQuestionTimeout + 1.0;
+        auto r = student.tick();
+        CHECK(r.action == Action::Cancelled && student.getPhase() == Phase::Idle);
+        CHECK(student.receive("Jo", RecordingMessage::request("nnnnnnnn77")).action == Action::ShowQuestion);
+    }
+    {
+        // someone not in the recording sends Alive: ignored; an Alive for another id gets a Stop back
+        Pair p("oooooooo88");
+        CHECK(p.teacher.receive("Mallory", RecordingMessage::alive("oooooooo88")).out.isEmpty());
+        auto r = p.teacher.receive("Sam", RecordingMessage::alive("pppppppp99"));
+        CHECK(r.out.size() == 1 && r.out[0].type == RecordingMessage::Stop && p.teacher.isRecording());
     }
 }
 
@@ -226,6 +318,7 @@ int runRecordingTests()
     testMessages();
     testOneToOne();
     testDeclineAndEdgeCases();
+    testReliability();
     testSummaries();
     std::printf("  recording consent and summaries: %s\n", failures == 0 ? "ok" : "FAILED");
     return failures;

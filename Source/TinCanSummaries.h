@@ -18,6 +18,7 @@ struct SummaryHooks
     std::function<File()> getFolder;                         // where recordings are saved
     std::function<void(const File & audio, double seconds)> play;
     std::function<void()> stop;
+    std::function<void(const File & audio)> unload;          // release the file if the player has it open
 };
 
 class SummariesPanel : public Component

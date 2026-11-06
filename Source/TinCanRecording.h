@@ -5,6 +5,9 @@
 
 #include "JuceHeader.h"
 
+#include <functional>
+#include <map>
+
 // Lesson recording with consent, highlights and summaries (T-045, T-046). See doc/TINCAN-RECORDING.md.
 //
 // Nobody is recorded without saying yes: pressing Record in a lesson asks everyone else first,
@@ -23,7 +26,7 @@ inline bool isRecordingTag(const String & tags) { return tags == kRecordingTag; 
 
 struct RecordingMessage
 {
-    enum Type { Invalid, Request, Answer, Start, Mark, Stop };
+    enum Type { Invalid, Request, Answer, Start, Mark, Stop, Alive };
 
     Type type = Invalid;
     String id;          // the request this belongs to: 8-32 letters/digits
@@ -44,6 +47,8 @@ struct RecordingMessage
     static RecordingMessage start(const String & id, const StringArray & people) { RecordingMessage m; m.type = Start; m.id = id; m.people = people; return m; }
     static RecordingMessage mark(const String & id, const String & label, double ago);
     static RecordingMessage stop(const String & id) { RecordingMessage m; m.type = Stop; m.id = id; return m; }
+    // sent every kAliveEvery seconds while recording; anyone not recording that id answers Stop
+    static RecordingMessage alive(const String & id) { RecordingMessage m; m.type = Alive; m.id = id; return m; }
 };
 
 // a random request id
@@ -61,9 +66,17 @@ public:
         StartRecording,   // everyone agreed: start recording now
         Declined,         // `who` said no (or isn't answering); nothing is recorded
         Cancelled,        // a question we were shown is no longer needed
-        StopRecording,    // `who` stopped it, or someone who hadn't agreed joined
+        StopRecording,    // `who` stopped it, left, or hadn't agreed and joined
+        ConnectionLost,   // nothing heard from `who` for kLostAfter seconds: recording stopped
         AddMark           // `who` added a highlight `label`, `ago` seconds before it arrived
     };
+
+    static constexpr double kAliveEvery = 10.0;       // seconds between Alive messages
+    static constexpr double kLostAfter = 30.0;        // stop when someone is silent this long
+    static constexpr double kQuestionTimeout = 75.0;  // a question or agreement nobody follows up ends
+
+    // seconds, steadily increasing; tests replace it
+    std::function<double()> clock = []() { return Time::getMillisecondCounterHiRes() * 0.001; };
 
     struct Result
     {
@@ -95,16 +108,23 @@ public:
 
     // a message from someone in the lesson
     Result receive(const String & from, const RecordingMessage & m);
-    // someone left: while asking they no longer need to answer
+    // someone left: while asking they no longer need to answer; a recording stops (they must agree again)
     Result peerLeft(const String & name);
+    // call about once a second: sends Alive, notices silence, ends stale questions
+    Result tick();
     // someone joined: a recording they haven't agreed to stops
     Result peerJoined(const String & name);
 
 private:
     Result startIfAllAgreed();
     void reset();
+    void setPhase(Phase p);
+    void beginRecording();
 
     Phase phase = Phase::Idle;
+    double phaseSince = 0.0;
+    double lastAliveSent = 0.0;
+    std::map<String, double> lastHeard;   // Recording: when each other person was last heard
     String id;
     String me, asker;
     StringArray waitingFor;   // Asking: people who haven't answered yet

@@ -577,7 +577,7 @@ private:
     String mLessonTitle;
 
     // lesson recording with everyone's consent, highlights and summaries (T-045, T-046)
-    enum class RecordingCause { Local, Remote, Joined, Left };
+    enum class RecordingCause { Local, Remote, Joined, Left, Timer };
     void onRecordPressed();
     bool startLocalRecording();
     void stopLocalRecording();
@@ -599,6 +599,14 @@ private:
     Time mRecordingStarted;
     std::unique_ptr<TextButton> mMarkButton;
     std::unique_ptr<AlertWindow> mRecordQuestion;
+    int mRecordQuestionGeneration = 0;   // tells a stale dialog callback from the current dialog's
+    // once a second: Alive messages, silence, stale questions (TinCan::RecordingConsent::tick)
+    struct RecordingTicker : public Timer
+    {
+        std::function<void()> onTick;
+        void timerCallback() override { if (onTick) onTick(); }
+    };
+    RecordingTicker mRecordingTicker;
     CriticalSection mRecordingMsgLock;
     StringArray mRecordingMsgFrom, mRecordingMsgJson;  // received on the network thread
 
