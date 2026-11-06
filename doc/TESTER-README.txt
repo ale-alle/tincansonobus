@@ -38,6 +38,20 @@ Talk for at least 10 minutes, and write down:
  7. If you have an instrument, play together for a few minutes. How does it feel?
  8. Optional: click "Tools" at the bottom and try the keyboard, tuner and metronome.
 
+NEW IN THIS VERSION
+ 9. Sharing: in the video window, click "Share..." and choose "Share my screen or a window"
+    (Windows asks which one). If you have a second camera, it is listed there too. The other
+    tester should see what you share large, with your camera small. Click "Stop sharing" to end.
+10. Recording: one of you clicks the round Record button in the main window. The other one is
+    asked "Record this lesson?". Nothing is recorded unless you click "Allow recording".
+    Once you both agree, each PC records its own copy.
+11. While it records, click "Mark" at a moment worth coming back to. A small box lets you give
+    it a name (optional): type one and press Enter. Mark two or three moments each.
+12. Either of you clicks Record again to stop. It should stop on both PCs, and a "Teaching tools"
+    window opens on the "Summaries" tab. Double-click one of the moments: the recording plays
+    from just before it. Click "Stop" to stop playing.
+    Write down: did both PCs show the same moments? Did the names you typed appear?
+
 When you finish, close CanDuet and send your notes to the person who invited you.
 Include a screenshot of anything that looked wrong.
 
@@ -55,7 +69,9 @@ PROBLEMS
 
 PRIVACY
 - The sound passes through our test server in Toronto, so neither PC sees the other's internet
-  address. It's encrypted so the server can't listen to it, and it isn't recorded.
+  address. It's encrypted so the server can't listen to it, and the server doesn't record it.
+- Lesson recordings happen only if you both click to allow them. Your copy stays on your own PC
+  (in Music\CanDuet) and is never uploaded. You can delete it in Tools > Summaries > Delete.
 - The video also passes through our test server. It's encrypted on the way and isn't recorded,
   but the server could technically see it. Only test with people you know.
 - CanDuet keeps a short list of connection steps in %APPDATA%\CanDuet\connection-log.txt, with no
