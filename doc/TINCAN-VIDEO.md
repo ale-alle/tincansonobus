@@ -102,7 +102,7 @@ Token claims, signed with the LiveKit API secret (a Worker secret; the client ne
    - Grant the camera only to our site, without the generic WebView2 prompt (needs a small patch to JUCE's `WebView2` class: `add_PermissionRequested`).
    - Turn on LiveKit end-to-end encryption with a key derived from the lesson key (HKDF, label "canduet-video"), so even our SFU can't see the video.
    - A setup-check page with a camera preview before the lesson.
-4. **Screen / second-camera share (T-044): built 2026-11-05** on branch `t-044-share-record`, script syntax-checked; **not yet run against LiveKit** (the local test server couldn't be started in that session). To test: two copies or two PCs with video, press Share… on one. The VPS join service must be updated first, because its tokens only allow `camera` (re-upload `scripts/tincan-mock-redeem.py`, see TINCAN-VPS.md).
+4. **Screen / second-camera share (T-044): built 2026-11-05** on branch `t-044-share-record`, **owner verified 2026-11-05 in a lesson with the student between two homes** through the Toronto test server (join service re-uploaded so tokens allow `camera, screen_share`).
 5. **Later:** macOS (WKWebView).
 
 ## Open questions for the owner

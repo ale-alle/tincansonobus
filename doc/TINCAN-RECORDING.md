@@ -1,6 +1,6 @@
 # Lesson recording, highlights and summaries (T-045, T-046)
 
-Status: **built 2026-11-05 on branch `t-044-share-record`**, tested with two copies on one PC (below). Project tasks and decisions live in the tincanstudios-site repo (`docs/TASKS.md`, `docs/APP_TOOLS.md`).
+Status: **built 2026-11-05 on branch `t-044-share-record`**, tested with two copies on one PC (below), and **verified by the owner the same day in a lesson with the student between two homes** (recording and summaries worked). Project tasks and decisions live in the tincanstudios-site repo (`docs/TASKS.md`, `docs/APP_TOOLS.md`).
 
 ## What people see
 - **Record** (the existing button) asks everyone else in the lesson first: "Alex wants to record this lesson… **Allow recording** / **Not now**".
