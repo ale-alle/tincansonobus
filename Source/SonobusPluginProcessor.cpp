@@ -376,8 +376,6 @@ struct SonobusAudioProcessor::RemotePeer {
 
 
 
-// Tin Can: with a lesson key set, every packet except those addressed to the
-// connection server (/aoo/server/...) is sealed. Returns false if it must not be sent.
 // Tin Can: connection steps for test support, in %APPDATA%\CanDuet\connection-log.txt. Never holds
 // names, addresses, tickets or keys. Starts over when it passes 256 KB.
 static void tincan_log(const String & text)
@@ -392,6 +390,8 @@ static void tincan_log(const String & text)
     file.appendText(Time::getCurrentTime().toISO8601(true) + " " + text + "\n");
 }
 
+// Tin Can: with a lesson key set, every packet except those addressed to the
+// connection server (/aoo/server/...) is sealed. Returns false if it must not be sent.
 static bool tincan_seal_if_needed(SonobusAudioProcessor::EndpointState * endpoint, const char *& data, int32_t & size, char * sealbuf, int sealcap)
 {
     if (!endpoint->cipher || !endpoint->cipher->hasKey()) return true;

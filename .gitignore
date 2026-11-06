@@ -6,3 +6,8 @@ release/1.*
 mobile/Builds
 out/
 .vs/
+
+# Tin Can test kits and server uploads hold tickets: never commit them
+tickets.env
+canduet-relay-setup/
+CanDuet-Test-*.zip
