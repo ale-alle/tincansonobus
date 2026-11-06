@@ -1049,6 +1049,12 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
         mRecordingButton->setTitle(TRANS("Record"));
         mRecordingButton->setClickingTogglesState(true);
 
+        mMarkButton = std::make_unique<TextButton>("mark");
+        mMarkButton->setButtonText(TRANS("Mark"));
+        mMarkButton->setTooltip(TRANS("Mark this moment as a highlight of the recording"));
+        mMarkButton->setColour(TextButton::buttonColourId, Colour(0xff6b3a14));
+        mMarkButton->onClick = [this]() { markPressed(); };
+
         mFileRecordingLabel = std::make_unique<Label>("rectime", "");
         mFileRecordingLabel->setJustificationType(Justification::centredBottom);
         mFileRecordingLabel->setFont(12);
@@ -1238,6 +1244,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 
     if (mRecordingButton) {
         mTopLevelContainer->addAndMakeVisible(mRecordingButton.get());
+        mTopLevelContainer->addChildComponent(mMarkButton.get());
         mTopLevelContainer->addAndMakeVisible(mFileBrowseButton.get());
         mTopLevelContainer->addAndMakeVisible(mFileRecordingLabel.get());
         mTopLevelContainer->addChildComponent(mPlayButton.get());
@@ -1391,6 +1398,11 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 
 SonobusAudioProcessorEditor::~SonobusAudioProcessorEditor()
 {
+    if (mRecordingConsent.isRecording() && processor.isRecordingToFile()) {
+        saveLessonSummary(processor.getElapsedRecordTime(), false);
+    }
+    mRecordQuestion.reset();
+
     if (menuBarModel) {
         menuBarModel->setApplicationCommandManagerToWatch(nullptr);
 #if JUCE_MAC
@@ -1728,6 +1740,18 @@ void SonobusAudioProcessorEditor::aooClientPeerChangedState(SonobusAudioProcesso
 
 void SonobusAudioProcessorEditor::sbChatEventReceived(SonobusAudioProcessor *comp, const SBChatEvent & mesg)
 {
+    if (TinCan::isRecordingTag(mesg.tags)) {
+        {
+            const ScopedLock sl(mRecordingMsgLock);
+            if (mRecordingMsgJson.size() < 64) {  // a flood is dropped, not queued without limit
+                mRecordingMsgFrom.add(mesg.from);
+                mRecordingMsgJson.add(mesg.message);
+            }
+        }
+        triggerAsyncUpdate();
+        return;
+    }
+
     haveNewChatEvents = true;
 
     triggerAsyncUpdate();
@@ -2153,178 +2177,7 @@ void SonobusAudioProcessorEditor::buttonClicked (Button* buttonThatWasClicked)
         }
     }
     else if (buttonThatWasClicked == mRecordingButton.get()) {
-        if (processor.isRecordingToFile()) {
-            processor.stopRecordingToFile();
-
-            mRecordingButton->setToggleState(false, dontSendNotification);
-            //updateServerStatusLabel("Stopped Recording");
-
-            String filepath;
-#if (JUCE_IOS || JUCE_ANDROID)
-            if (lastRecordedFile.isLocalFile()) {
-                filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userDocumentsDirectory));
-                //showPopTip(TRANS("Finished recording to ") + filepath, 4000, mRecordingButton.get(), 130);
-            }
-            else {
-                filepath = lastRecordedFile.getFileName();
-            }
-#elif (JUCE_ANDROID)
-            filepath = lastRecordedFile.getFileName();
-#else
-            if (lastRecordedFile.isLocalFile()) {
-                filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userHomeDirectory));
-            }
-            else {
-                filepath = lastRecordedFile.getFileName();
-            }
-#endif
-
-            mRecordingButton->setTooltip(TRANS("Last recorded file: ") + filepath);
-
-            //mFileRecordingLabel->setText("Total: " + SonoUtility::durationToString(processor.getElapsedRecordTime(), true), dontSendNotification);
-            mFileRecordingLabel->setText("", dontSendNotification);
-
-            //Timer::callAfterDelay(200, []() {
-            //    AccessibilityHandler::postAnnouncement(TRANS("Recording finished"), AccessibilityHandler::AnnouncementPriority::high);
-            //});
-
-
-            if (processor.getRecordFinishOpens()) {
-                // load up recording
-                loadAudioFromURL(lastRecordedFile);
-                if (lastRecordedFile.isLocalFile()) {
-                    mCurrOpenDir = lastRecordedFile.getLocalFile().getParentDirectory();
-                }
-                updateLayout();
-                resized();
-            }
-            
-        } else {
-
-            SafePointer<SonobusAudioProcessorEditor> safeThis (this);
-
-#if JUCE_ANDROID
-            if (getAndroidSDKVersion() < 29) {
-                if (! RuntimePermissions::isGranted (RuntimePermissions::writeExternalStorage))
-                {
-                    RuntimePermissions::request (RuntimePermissions::writeExternalStorage,
-                                                 [safeThis] (bool granted) mutable
-                                                 {
-                        if (granted)
-                            safeThis->buttonClicked (safeThis->mRecordingButton.get());
-                    });
-                    return;
-                }
-            }
-#endif
-            
-            // create new timestamped filename
-            String filename = (currGroup.isEmpty() ? "CanDuetSession" : currGroup) + String("_") + Time::getCurrentTime().formatted("%Y-%m-%d_%H.%M.%S");
-
-            filename = File::createLegalFileName(filename);
-
-            auto parentDirUrl = processor.getDefaultRecordingDirectory();
-            
-            if (parentDirUrl.isEmpty()) {
-                // only happens on android, ask for external location to store files
-                
-                auto alertcb = [safeThis] (int button) {
-                    if (safeThis && button == 0) {
-                        safeThis->requestRecordDir([safeThis] (URL recurl) mutable
-                                                   {
-                            //if (!recurl.isEmpty()) {
-                            //    safeThis->buttonClicked (safeThis->mRecordingButton.get());
-                            //}
-                        });
-                    }
-                };
-                
-#if JUCE_ANDROID
-                auto mbopts = MessageBoxOptions().withTitle(TRANS("Select Folder")).withMessage(TRANS("You need to first choose a folder on your device to save recordings to.")).withButton(TRANS("Choose Folder")).withButton(TRANS("Cancel")).withAssociatedComponent(this);
-
-                AlertWindow::showAsync(mbopts, alertcb);
-#else
-                // just do it
-                alertcb(0);
-#endif
-                return;
-            }
-            
-            File parentDir;
-            if (parentDirUrl.isLocalFile()) {
-                parentDir = parentDirUrl.getLocalFile();
-                parentDir.createDirectory();
-            }
-
-            filename += ".flac";
-            
-            //File file (parentDir.getNonexistentChildFile (filename, ".flac"));
-            URL returl;
-            
-            if (processor.startRecordingToFile(parentDirUrl, filename, returl)) {
-                //updateServerStatusLabel("Started recording...");
-                lastRecordedFile = returl;
-                String filepath;
-
-#if (JUCE_IOS || JUCE_ANDROID)
-                showPopTip(TRANS("Started recording output"), 2000, mRecordingButton.get());
-#else
-                //Timer::callAfterDelay(200, []() {
-                //    AccessibilityHandler::postAnnouncement(TRANS("Started recording output"), AccessibilityHandler::AnnouncementPriority::high);
-                //});
-#endif
-
-
-
-                if (processor.getDefaultRecordingOptions() == SonobusAudioProcessor::RecordMix) {
-
-#if (JUCE_IOS)
-                    if (lastRecordedFile.isLocalFile()) {
-                        filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userDocumentsDirectory));
-                    } else {
-                        filepath = lastRecordedFile.getFileName();
-                    }
-#elif JUCE_ANDROID
-                    filepath = lastRecordedFile.getFileName();
-#else
-                    if (lastRecordedFile.isLocalFile()) {
-                        filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userHomeDirectory));
-                    } else {
-                        filepath = lastRecordedFile.getFileName();
-                    }
-#endif
-
-                    mRecordingButton->setTooltip(TRANS("Recording audio to: ") + filepath);
-                } else 
-                {
-#if (JUCE_IOS)
-                    if (lastRecordedFile.isLocalFile()) {
-                        filepath = lastRecordedFile.getLocalFile().getParentDirectory().getRelativePathFrom(File::getSpecialLocation (File::userDocumentsDirectory));
-                    } else {
-                        filepath = lastRecordedFile.getFileName();
-                    }
-#elif (JUCE_ANDROID)
-                    filepath = lastRecordedFile.getFileName();
-#else
-                    if (lastRecordedFile.isLocalFile()) {
-                        filepath = lastRecordedFile.getLocalFile().getParentDirectory().getRelativePathFrom(File::getSpecialLocation (File::userHomeDirectory));
-                    } else {
-                        filepath = lastRecordedFile.getFileName();
-                    }
-#endif
-                    mRecordingButton->setTooltip(TRANS("Recording multi-track audio to: ") + filepath);
-                }
-            }
-            else {
-                // show error starting record
-                String lasterr = processor.getLastErrorMessage();
-                showPopTip(lasterr, 0, mRecordingButton.get());
-            }
-            
-            mFileRecordingLabel->setText("", dontSendNotification);
-            mRecordingButton->setToggleState(true, dontSendNotification);
-
-        }
+        onRecordPressed();
     }
     else if (buttonThatWasClicked == mFileBrowseButton.get()) {
         if (mFileChooser.get() == nullptr) {
@@ -2873,6 +2726,540 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
     });
 }
 
+// ---- lesson recording (T-045, T-046) ----
+
+// SonoBus's own recording start, unchanged apart from reporting whether it started
+bool SonobusAudioProcessorEditor::startLocalRecording()
+{
+    if (processor.isRecordingToFile()) return true;
+
+
+    SafePointer<SonobusAudioProcessorEditor> safeThis (this);
+
+#if JUCE_ANDROID
+    if (getAndroidSDKVersion() < 29) {
+        if (! RuntimePermissions::isGranted (RuntimePermissions::writeExternalStorage))
+        {
+            RuntimePermissions::request (RuntimePermissions::writeExternalStorage,
+                                         [safeThis] (bool granted) mutable
+                                         {
+                if (granted)
+                    safeThis->buttonClicked (safeThis->mRecordingButton.get());
+            });
+            return false;
+        }
+    }
+#endif
+    
+    // create new timestamped filename
+    String filename = (currGroup.isEmpty() ? "CanDuetSession" : currGroup) + String("_") + Time::getCurrentTime().formatted("%Y-%m-%d_%H.%M.%S");
+
+    filename = File::createLegalFileName(filename);
+
+    auto parentDirUrl = processor.getDefaultRecordingDirectory();
+    
+    if (parentDirUrl.isEmpty()) {
+        // only happens on android, ask for external location to store files
+        
+        auto alertcb = [safeThis] (int button) {
+            if (safeThis && button == 0) {
+                safeThis->requestRecordDir([safeThis] (URL recurl) mutable
+                                           {
+                    //if (!recurl.isEmpty()) {
+                    //    safeThis->buttonClicked (safeThis->mRecordingButton.get());
+                    //}
+                });
+            }
+        };
+        
+#if JUCE_ANDROID
+        auto mbopts = MessageBoxOptions().withTitle(TRANS("Select Folder")).withMessage(TRANS("You need to first choose a folder on your device to save recordings to.")).withButton(TRANS("Choose Folder")).withButton(TRANS("Cancel")).withAssociatedComponent(this);
+
+        AlertWindow::showAsync(mbopts, alertcb);
+#else
+        // just do it
+        alertcb(0);
+#endif
+        return false;
+    }
+    
+    File parentDir;
+    if (parentDirUrl.isLocalFile()) {
+        parentDir = parentDirUrl.getLocalFile();
+        parentDir.createDirectory();
+    }
+
+    filename += ".flac";
+    
+    //File file (parentDir.getNonexistentChildFile (filename, ".flac"));
+    URL returl;
+    
+    if (processor.startRecordingToFile(parentDirUrl, filename, returl)) {
+        //updateServerStatusLabel("Started recording...");
+        lastRecordedFile = returl;
+        String filepath;
+
+#if (JUCE_IOS || JUCE_ANDROID)
+        showPopTip(TRANS("Started recording output"), 2000, mRecordingButton.get());
+#else
+        //Timer::callAfterDelay(200, []() {
+        //    AccessibilityHandler::postAnnouncement(TRANS("Started recording output"), AccessibilityHandler::AnnouncementPriority::high);
+        //});
+#endif
+
+
+
+        if (processor.getDefaultRecordingOptions() == SonobusAudioProcessor::RecordMix) {
+
+#if (JUCE_IOS)
+            if (lastRecordedFile.isLocalFile()) {
+                filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userDocumentsDirectory));
+            } else {
+                filepath = lastRecordedFile.getFileName();
+            }
+#elif JUCE_ANDROID
+            filepath = lastRecordedFile.getFileName();
+#else
+            if (lastRecordedFile.isLocalFile()) {
+                filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userHomeDirectory));
+            } else {
+                filepath = lastRecordedFile.getFileName();
+            }
+#endif
+
+            mRecordingButton->setTooltip(TRANS("Recording audio to: ") + filepath);
+        } else 
+        {
+#if (JUCE_IOS)
+            if (lastRecordedFile.isLocalFile()) {
+                filepath = lastRecordedFile.getLocalFile().getParentDirectory().getRelativePathFrom(File::getSpecialLocation (File::userDocumentsDirectory));
+            } else {
+                filepath = lastRecordedFile.getFileName();
+            }
+#elif (JUCE_ANDROID)
+            filepath = lastRecordedFile.getFileName();
+#else
+            if (lastRecordedFile.isLocalFile()) {
+                filepath = lastRecordedFile.getLocalFile().getParentDirectory().getRelativePathFrom(File::getSpecialLocation (File::userHomeDirectory));
+            } else {
+                filepath = lastRecordedFile.getFileName();
+            }
+#endif
+            mRecordingButton->setTooltip(TRANS("Recording multi-track audio to: ") + filepath);
+        }
+    }
+    else {
+        // show error starting record
+        String lasterr = processor.getLastErrorMessage();
+        showPopTip(lasterr, 0, mRecordingButton.get());
+    }
+    
+
+    mFileRecordingLabel->setText("", dontSendNotification);
+    mRecordingButton->setToggleState(processor.isRecordingToFile(), dontSendNotification);
+    return processor.isRecordingToFile();
+}
+
+// SonoBus's own recording stop, plus the lesson summary
+void SonobusAudioProcessorEditor::stopLocalRecording()
+{
+    if (!processor.isRecordingToFile()) return;
+    const double duration = processor.getElapsedRecordTime();
+
+    processor.stopRecordingToFile();
+
+    mRecordingButton->setToggleState(false, dontSendNotification);
+    //updateServerStatusLabel("Stopped Recording");
+
+    String filepath;
+#if (JUCE_IOS || JUCE_ANDROID)
+    if (lastRecordedFile.isLocalFile()) {
+        filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userDocumentsDirectory));
+        //showPopTip(TRANS("Finished recording to ") + filepath, 4000, mRecordingButton.get(), 130);
+    }
+    else {
+        filepath = lastRecordedFile.getFileName();
+    }
+#elif (JUCE_ANDROID)
+    filepath = lastRecordedFile.getFileName();
+#else
+    if (lastRecordedFile.isLocalFile()) {
+        filepath = lastRecordedFile.getLocalFile().getRelativePathFrom(File::getSpecialLocation (File::userHomeDirectory));
+    }
+    else {
+        filepath = lastRecordedFile.getFileName();
+    }
+#endif
+
+    mRecordingButton->setTooltip(TRANS("Last recorded file: ") + filepath);
+
+    //mFileRecordingLabel->setText("Total: " + SonoUtility::durationToString(processor.getElapsedRecordTime(), true), dontSendNotification);
+    mFileRecordingLabel->setText("", dontSendNotification);
+
+    //Timer::callAfterDelay(200, []() {
+    //    AccessibilityHandler::postAnnouncement(TRANS("Recording finished"), AccessibilityHandler::AnnouncementPriority::high);
+    //});
+
+
+    if (processor.getRecordFinishOpens()) {
+        // load up recording
+        loadAudioFromURL(lastRecordedFile);
+        if (lastRecordedFile.isLocalFile()) {
+            mCurrOpenDir = lastRecordedFile.getLocalFile().getParentDirectory();
+        }
+        updateLayout();
+        resized();
+    }
+
+    saveLessonSummary(duration, true);
+    updateLayout();
+    resized();
+}
+
+namespace {
+
+// recording steps for test support, in the same file as the connection steps
+// (%APPDATA%\CanDuet\connection-log.txt); no names, labels or file paths
+void logRecording(const String & text)
+{
+    static const String runTag = String::toHexString(Random::getSystemRandom().nextInt());  // tells two copies apart
+    static CriticalSection lock;
+    const ScopedLock sl(lock);
+    auto file = File::getSpecialLocation(File::userApplicationDataDirectory)
+                    .getChildFile("CanDuet").getChildFile("connection-log.txt");
+    file.getParentDirectory().createDirectory();
+    if (file.getSize() > 256 * 1024) file.deleteFile();
+    file.appendText(Time::getCurrentTime().toISO8601(true) + " recording[" + runTag + "] " + text + "\n");
+}
+
+const char * phaseName(TinCan::RecordingConsent::Phase p)
+{
+    using Phase = TinCan::RecordingConsent::Phase;
+    switch (p) {
+        case Phase::Idle: return "idle";
+        case Phase::Asking: return "asking";
+        case Phase::Asked: return "asked";
+        case Phase::Agreed: return "agreed";
+        case Phase::Recording: return "recording";
+    }
+    return "?";
+}
+
+// small box under the Mark button for naming a highlight; the name is optional
+class MarkLabelBox : public Component
+{
+public:
+    explicit MarkLabelBox(std::function<void(const String &)> onDone_) : onDone(std::move(onDone_))
+    {
+        prompt.setText(TRANS("Highlight added. Name it (optional):"), dontSendNotification);
+        addAndMakeVisible(prompt);
+        editor.setTextToShowWhenEmpty(TRANS("e.g. left hand fingering"), Colours::grey);
+        editor.setInputRestrictions(TinCan::RecordingMessage::kMaxLabel);
+        editor.onReturnKey = [this]() { close(); };
+        editor.onEscapeKey = [this]() { close(); };
+        addAndMakeVisible(editor);
+        okButton.onClick = [this]() { close(); };
+        addAndMakeVisible(okButton);
+        setSize(300, 74);
+    }
+
+    ~MarkLabelBox() override { finish(); }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced(6);
+        prompt.setBounds(r.removeFromTop(22));
+        r.removeFromTop(4);
+        okButton.setBounds(r.removeFromRight(50));
+        r.removeFromRight(6);
+        editor.setBounds(r);
+    }
+
+    void visibilityChanged() override
+    {
+        if (isShowing()) editor.grabKeyboardFocus();
+    }
+
+private:
+    void finish()
+    {
+        if (done) return;
+        done = true;
+        if (onDone) onDone(editor.getText());
+    }
+
+    void close()
+    {
+        finish();
+        if (auto * box = findParentComponentOfClass<CallOutBox>()) box->dismiss();
+    }
+
+    std::function<void(const String &)> onDone;
+    Label prompt;
+    TextEditor editor;
+    TextButton okButton { TRANS("OK") };
+    bool done = false;
+};
+
+}
+
+String SonobusAudioProcessorEditor::getMyLessonName() const
+{
+    auto name = processor.getCurrentUsername();
+    if (name.isEmpty()) name = currConnectionInfo.userName;
+    if (name.isEmpty()) name = SystemStats::getFullUserName();
+    if (name.isEmpty()) name = SystemStats::getComputerName();
+    return name;
+}
+
+StringArray SonobusAudioProcessorEditor::getPeerNames() const
+{
+    StringArray names;
+    for (int i = 0; i < processor.getNumberRemotePeers(); ++i) {
+        auto n = processor.getRemotePeerUserName(i);
+        if (n.isNotEmpty()) names.addIfNotAlreadyThere(n);
+    }
+    return names;
+}
+
+File SonobusAudioProcessorEditor::getRecordingFolder() const
+{
+    auto url = processor.getDefaultRecordingDirectory();
+    return url.isLocalFile() ? url.getLocalFile() : File();
+}
+
+void SonobusAudioProcessorEditor::onRecordPressed()
+{
+    using Phase = TinCan::RecordingConsent::Phase;
+    auto phase = mRecordingConsent.getPhase();
+    logRecording(String("Record pressed, phase ") + phaseName(phase) + " file " + (processor.isRecordingToFile() ? "on" : "off"));
+
+    if (processor.isRecordingToFile() || phase != Phase::Idle) {
+        // Stop (or stop asking). Stopping stops it for everyone.
+        applyRecording(mRecordingConsent.stop(), RecordingCause::Local);
+        stopLocalRecording();
+        mRecordingButton->setToggleState(processor.isRecordingToFile(), dontSendNotification);
+        return;
+    }
+
+    mRecordingConsent.setName(getMyLessonName());
+    auto others = getPeerNames();
+    applyRecording(mRecordingConsent.ask(others), RecordingCause::Local);
+
+    if (mRecordingConsent.getPhase() == Phase::Asking) {
+        mRecordingButton->setToggleState(false, dontSendNotification);
+        showPopTip(TRANS("Asking") + " " + others.joinIntoString(", ") + " " + TRANS("to agree to recording. Press Record again to cancel."),
+                   5000, mRecordingButton.get(), 200);
+
+        Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+        auto id = mRecordingConsent.getId();
+        Timer::callAfterDelay(60000, [safeThis, id]() {
+            if (!safeThis || safeThis->mRecordingConsent.getPhase() != Phase::Asking || safeThis->mRecordingConsent.getId() != id) return;
+            safeThis->applyRecording(safeThis->mRecordingConsent.stop(), RecordingCause::Local);
+            safeThis->showPopTip(TRANS("No answer, so nothing is being recorded. Press Record to ask again."), 6000, safeThis->mRecordingButton.get(), 200);
+        });
+    }
+}
+
+void SonobusAudioProcessorEditor::sendRecordingMessages(const TinCan::RecordingConsent::Result & r)
+{
+    for (auto & m : r.out) {
+        SBChatEvent ev(SBChatEvent::UserType, processor.getCurrentJoinedGroup(), getMyLessonName(), "", TinCan::kRecordingTag, m.toJSON());
+        processor.sendChatEvent(ev);
+    }
+}
+
+void SonobusAudioProcessorEditor::handleRecordingMessages()
+{
+    StringArray from, json;
+    {
+        const ScopedLock sl(mRecordingMsgLock);
+        from.swapWith(mRecordingMsgFrom);
+        json.swapWith(mRecordingMsgJson);
+    }
+    if (from.isEmpty()) return;
+
+    mRecordingConsent.setName(getMyLessonName());
+    for (int i = 0; i < from.size(); ++i) {
+        auto m = TinCan::RecordingMessage::parse(json[i]);
+        logRecording("received type " + String((int) m.type) + " phase " + phaseName(mRecordingConsent.getPhase()));
+        applyRecording(mRecordingConsent.receive(from[i], TinCan::RecordingMessage::parse(json[i])), RecordingCause::Remote);
+    }
+}
+
+void SonobusAudioProcessorEditor::applyRecording(const TinCan::RecordingConsent::Result & r, RecordingCause cause)
+{
+    using Action = TinCan::RecordingConsent::Action;
+    if (r.action != Action::None || !r.out.isEmpty()) {
+        String sent;
+        for (auto & m : r.out) sent << (int) m.type << " ";
+        logRecording("action " + String((int) r.action) + " cause " + String((int) cause) + " phase " + phaseName(mRecordingConsent.getPhase())
+                     + " sent [" + sent.trim() + "] file " + (processor.isRecordingToFile() ? "on" : "off"));
+    }
+    sendRecordingMessages(r);
+
+    switch (r.action) {
+        case Action::None:
+            break;
+
+        case Action::ShowQuestion:
+            showRecordQuestion(r.who);
+            break;
+
+        case Action::StartRecording:
+            dismissRecordQuestion();
+            mHighlights.clear();
+            mRecordingPeople = mRecordingConsent.getPeople();
+            mRecordingStarted = Time::getCurrentTime();
+            if (!startLocalRecording()) {
+                // can't record here, so nobody records
+                sendRecordingMessages(mRecordingConsent.stop());
+                break;
+            }
+            if (mRecordingPeople.size() > 1) {
+                showPopTip(TRANS("Recording. Each of you gets a copy. Press Mark at moments worth coming back to."),
+                           5000, mRecordingButton.get(), 220);
+            }
+            updateLayout();
+            resized();
+            break;
+
+        case Action::Declined:
+            if (cause == RecordingCause::Joined)
+                showPopTip(r.who + " " + TRANS("joined, so the recording question was cancelled. Press Record to ask everyone again."), 6000, mRecordingButton.get(), 220);
+            else if (cause == RecordingCause::Left)
+                showPopTip(r.who + " " + TRANS("left before answering, so nothing is being recorded."), 6000, mRecordingButton.get(), 220);
+            else
+                showPopTip(r.who + " " + TRANS("didn't agree to recording, so nothing is being recorded."), 6000, mRecordingButton.get(), 220);
+            break;
+
+        case Action::Cancelled:
+            dismissRecordQuestion();
+            if (cause == RecordingCause::Remote)
+                showPopTip(r.who + " " + TRANS("cancelled the recording request."), 4000, mRecordingButton.get(), 200);
+            break;
+
+        case Action::StopRecording:
+            stopLocalRecording();
+            if (cause == RecordingCause::Joined)
+                showPopTip(TRANS("Recording stopped because") + " " + r.who + " " + TRANS("joined. Press Record to ask everyone again."), 7000, mRecordingButton.get(), 220);
+            else if (cause == RecordingCause::Remote)
+                showPopTip(r.who + " " + TRANS("stopped the recording. Your copy and its highlights are in Tools > Summaries."), 6000, mRecordingButton.get(), 220);
+            break;
+
+        case Action::AddMark: {
+            double at = jmax(0.0, processor.getElapsedRecordTime() - r.ago);
+            mHighlights.add({ at, r.label, r.who });
+            if (cause == RecordingCause::Remote) {
+                showPopTip(r.who + " " + TRANS("marked a highlight") + (r.label.isNotEmpty() ? ": " + r.label : String()),
+                           3000, mMarkButton.get(), 200);
+            }
+            break;
+        }
+    }
+
+    mRecordingButton->setToggleState(processor.isRecordingToFile(), dontSendNotification);
+}
+
+void SonobusAudioProcessorEditor::showRecordQuestion(const String & who)
+{
+    dismissRecordQuestion();
+
+    mRecordQuestion = std::make_unique<AlertWindow>(TRANS("Record this lesson?"),
+        who + " " + TRANS("wants to record this lesson. If you agree, each of you gets a copy of the recording on your own computer, "
+                          "with the highlights either of you marks. Nothing is uploaded. Either of you can stop it at any time."),
+        MessageBoxIconType::QuestionIcon, this);
+    mRecordQuestion->addButton(TRANS("Allow recording"), 1);
+    mRecordQuestion->addButton(TRANS("Not now"), 0, KeyPress(KeyPress::escapeKey));
+
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    auto * window = mRecordQuestion.get();
+    window->enterModalState(true, ModalCallbackFunction::create([safeThis, window](int result) {
+        // the window can't be deleted inside its own callback
+        MessageManager::callAsync([safeThis, window, result]() {
+            if (!safeThis || safeThis->mRecordQuestion.get() != window) return;
+            safeThis->mRecordQuestion.reset();
+            if (result >= 0 && safeThis->mRecordingConsent.getPhase() == TinCan::RecordingConsent::Phase::Asked) {
+                safeThis->applyRecording(safeThis->mRecordingConsent.answer(result == 1), RecordingCause::Local);
+            }
+        });
+    }), false);
+}
+
+void SonobusAudioProcessorEditor::dismissRecordQuestion()
+{
+    if (mRecordQuestion && mRecordQuestion->isCurrentlyModal()) {
+        mRecordQuestion->exitModalState(-1);  // -1: closed for us, not an answer
+    }
+}
+
+void SonobusAudioProcessorEditor::markPressed()
+{
+    if (!mRecordingConsent.isRecording() || !processor.isRecordingToFile()) return;
+
+    const double pressedAt = processor.getElapsedRecordTime();
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    auto box = std::make_unique<MarkLabelBox>([safeThis, pressedAt](const String & label) {
+        // runs when the box closes, possibly while it is being deleted
+        MessageManager::callAsync([safeThis, pressedAt, label]() {
+            if (!safeThis) return;
+            double ago = jmax(0.0, safeThis->processor.getElapsedRecordTime() - pressedAt);
+            safeThis->applyRecording(safeThis->mRecordingConsent.mark(label, ago), RecordingCause::Local);
+        });
+    });
+    auto area = mMarkButton->getScreenBounds();
+    CallOutBox::launchAsynchronously(std::move(box), area, nullptr);
+}
+
+void SonobusAudioProcessorEditor::saveLessonSummary(double durationSeconds, bool showIt)
+{
+    if (!lastRecordedFile.isLocalFile()) return;
+    auto audio = lastRecordedFile.getLocalFile();
+
+    TinCan::LessonSummary summary;
+    summary.title = isInLessonRoom() ? mLessonTitle : String();
+    summary.durationSeconds = durationSeconds;
+    summary.started = mRecordingStarted.toMilliseconds() > 0 ? mRecordingStarted
+                                                             : Time::getCurrentTime() - RelativeTime::seconds(durationSeconds);
+    summary.people = mRecordingPeople.isEmpty() ? StringArray(getMyLessonName()) : mRecordingPeople;
+    summary.audioFileName = audio.getFileName();
+    summary.highlights = mHighlights;
+
+    auto file = TinCan::getSummaryFileFor(audio);
+    if (!summary.save(file)) return;
+
+    mHighlights.clear();
+    mRecordingPeople.clear();
+    mRecordingStarted = Time();
+
+    if (showIt) {
+        showToolsWindow(true);
+        if (mToolsWindow) mToolsWindow->showSummary(file);
+    }
+}
+
+TinCan::SummaryHooks SonobusAudioProcessorEditor::makeSummaryHooks()
+{
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    TinCan::SummaryHooks hooks;
+    hooks.getFolder = [safeThis]() { return safeThis ? safeThis->getRecordingFolder() : File(); };
+    hooks.play = [safeThis](const File & audio, double seconds) {
+        if (!safeThis || !audio.existsAsFile()) return;
+        URL url(audio);
+        if (!(safeThis->mCurrentAudioFile == url) && !safeThis->loadAudioFromURL(url)) return;
+        auto & transport = safeThis->processor.getTransportSource();
+        transport.setPosition(jlimit(0.0, jmax(0.0, transport.getLengthInSeconds()), seconds));
+        transport.start();
+        safeThis->updateTransportState();
+    };
+    hooks.stop = [safeThis]() {
+        if (!safeThis) return;
+        safeThis->processor.getTransportSource().stop();
+        safeThis->updateTransportState();
+    };
+    return hooks;
+}
+
 void SonobusAudioProcessorEditor::showToolsWindow(bool show)
 {
     if (!show) {
@@ -2886,7 +3273,7 @@ void SonobusAudioProcessorEditor::showToolsWindow(bool show)
     Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
     mToolsWindow = std::make_unique<TinCan::ToolsWindow>(processor, getAudioDeviceManager, [safeThis]() {
         if (safeThis) safeThis->showWorkspace();
-    }, [safeThis]() {
+    }, makeSummaryHooks(), [safeThis]() {
         // closing destroys the window, which stops the MIDI copy; do it after the click returns
         if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->showToolsWindow(false); });
     });
@@ -4051,6 +4438,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
         }
         else if (ev.type == ClientEvent::DisconnectEvent) {
             closeLessonVideo();
+            applyRecording(mRecordingConsent.stop(), RecordingCause::Local);
             String statstr;
             if (ev.success) {
                 statstr = TRANS("Disconnected from server");
@@ -4114,6 +4502,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
             String statstr;
             if (ev.success) {
                 closeLessonVideo();
+                applyRecording(mRecordingConsent.stop(), RecordingCause::Local);
                 statstr = isInLessonRoom() ? TRANS("Left lesson: ") + getDisplayGroupName() : TRANS("Left Group: ") + ev.group;
             } else {
                 statstr = TRANS("Failed to leave group: ") + ev.message;
@@ -4146,6 +4535,9 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
                 mChatView->addNewChatMessage(SBChatEvent(SBChatEvent::SystemType, ev.group, ev.user, "", "", mesg));
             }
 
+            // a recording this person hasn't agreed to stops
+            applyRecording(mRecordingConsent.peerJoined(ev.user), RecordingCause::Joined);
+
             // delay update
             Timer::callAfterDelay(200, [this] {
                 updatePeerState(true);
@@ -4160,6 +4552,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
             }
 
             mPeerContainer->peerLeftGroup(ev.group, ev.user);
+            applyRecording(mRecordingConsent.peerLeft(ev.user), RecordingCause::Left);
 
             updatePeerState(true);
             updateState(false);
@@ -4189,6 +4582,8 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
     {
         mChatView->refreshMessages();
     }
+
+    handleRecordingMessages();
 
     if (mReloadFile) {
         loadAudioFromURL(mCurrentAudioFile);
@@ -5136,6 +5531,11 @@ void SonobusAudioProcessorEditor::updateLayout()
 #endif
 
         toolbarBox.items.add(FlexItem(toolwidth, minitemheight, *mRecordingButton).withMargin(0).withFlex(0));
+        mMarkButton->setVisible(processor.isRecordingToFile());
+        if (processor.isRecordingToFile()) {
+            toolbarBox.items.add(FlexItem(2, 6).withMargin(0).withFlex(0));
+            toolbarBox.items.add(FlexItem(48, minitemheight, *mMarkButton).withMargin(2).withFlex(0));
+        }
         toolbarBox.items.add(FlexItem(2, 6).withMargin(0).withFlex(0.1).withMaxWidth(6));
         toolbarBox.items.add(FlexItem(toolwidth, minitemheight, *mFileBrowseButton).withMargin(0).withFlex(0));
     }

@@ -4,6 +4,7 @@
 
 
 #include "SonobusPluginProcessor.h"
+#include "TinCanRecording.h"
 #include "SonobusPluginEditor.h"
 
 #include "RunCumulantor.h"
@@ -2805,10 +2806,12 @@ bool SonobusAudioProcessor::handleOtherMessage(EndpointState * endpoint, const c
             String message (CharPointer_UTF8((it++)->AsString()));
 
             SBChatEvent chatevent(SBChatEvent::UserType, group, from, targets, tags, message);
-            
+
             if (!isAddressBlocked(endpoint->ipaddr)) {
-                
-                mAllChatEvents.add(chatevent);
+
+                // Tin Can recording control messages (T-045) go to the editor, never into the chat
+                if (!TinCan::isRecordingTag(tags))
+                    mAllChatEvents.add(chatevent);
                 clientListeners.call(&SonobusAudioProcessor::ClientListener::sbChatEventReceived, this, chatevent);
             }
 

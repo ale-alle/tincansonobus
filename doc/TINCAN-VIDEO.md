@@ -50,11 +50,12 @@ Token claims, signed with the LiveKit API secret (a Worker secret; the client ne
   "nbf": <lesson start − 15 min>, "exp": <lesson end + 15 min>,
   "video": { "room": "<the lesson's random room id>", "roomJoin": true,
              "canPublish": true, "canSubscribe": true, "canPublishData": false,
-             "canPublishSources": ["camera"] } }
+             "canPublishSources": ["camera", "screen_share"] } }
 ```
 - Use the same join window as the room ticket (T-019).
 - The room name is a random per-lesson value, never the lesson id or anyone's name.
 - The identity is random per participant per lesson, so the SFU learns nothing it doesn't need.
+- `screen_share` lets a person share one extra view (T-044). Without it, Share fails with "couldn't be shared" and the camera keeps working.
 - Web Crypto HMAC-SHA256 in the Worker is enough; no SDK is needed. `scripts/tincan-mock-redeem.py` (`video_token`) shows the exact encoding.
 
 ### Video page
@@ -64,6 +65,7 @@ Token claims, signed with the LiveKit API secret (a Worker secret; the client ne
   - Remote video large, own camera small and mirrored.
   - Camera on/off and camera picker (both remembered).
   - Plain-language status messages: waiting, camera off, reconnecting, camera blocked.
+  - **Share… (T-044):** share the screen or a window, or a second camera (hands at the keys, music on the stand). Published as LiveKit's screen-share source; a second camera has the track name `second-camera`. The other person sees the shared view large and the sharer's camera small (bottom left). One share per person; "Stop sharing", the browser's own stop, or unplugging the camera ends it. Audio is never shared.
 - 720p capture with simulcast and adaptive stream, so the quality drops on weak connections instead of freezing.
 - It exposes `window.canduetVideo` (phase, local/remote video flags) for support and automated tests.
 
@@ -100,7 +102,8 @@ Token claims, signed with the LiveKit API secret (a Worker secret; the client ne
    - Grant the camera only to our site, without the generic WebView2 prompt (needs a small patch to JUCE's `WebView2` class: `add_PermissionRequested`).
    - Turn on LiveKit end-to-end encryption with a key derived from the lesson key (HKDF, label "canduet-video"), so even our SFU can't see the video.
    - A setup-check page with a camera preview before the lesson.
-4. **Later:** screen or second-camera share (sheet music, hands at the keyboard), macOS (WKWebView).
+4. **Screen / second-camera share (T-044): built 2026-11-05** on branch `t-044-share-record`, script syntax-checked; **not yet run against LiveKit** (the local test server couldn't be started in that session). To test: two copies or two PCs with video, press Share… on one. The VPS join service must be updated first, because its tokens only allow `camera` (re-upload `scripts/tincan-mock-redeem.py`, see TINCAN-VPS.md).
+5. **Later:** macOS (WKWebView).
 
 ## Open questions for the owner
 - Hosting LiveKit on the same Toronto VPS as the audio server (recommended) makes the VPS decision cover both.

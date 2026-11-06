@@ -65,14 +65,14 @@ def b64url(data):
 
 
 def video_token(identity, name):
-    """LiveKit access token (HS256 JWT): join one room, publish camera only, no data channel."""
+    """LiveKit access token (HS256 JWT): join one room, publish camera and a shared view (screen or second camera), no data channel."""
     now = int(time.time())
     ttl = VIDEO_TTL
     header = {"alg": "HS256", "typ": "JWT"}
     claims = {
         "iss": VIDEO_KEY, "sub": identity, "name": name, "nbf": now - 10, "exp": now + ttl,
         "video": {"room": VIDEO_ROOM, "roomJoin": True, "canPublish": True, "canSubscribe": True,
-                  "canPublishData": False, "canPublishSources": ["camera"]},
+                  "canPublishData": False, "canPublishSources": ["camera", "screen_share"]},
     }
     signing_input = b64url(json.dumps(header).encode()) + "." + b64url(json.dumps(claims).encode())
     sig = hmac.new(VIDEO_SECRET.encode(), signing_input.encode(), hashlib.sha256).digest()

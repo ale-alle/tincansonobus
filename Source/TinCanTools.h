@@ -6,6 +6,7 @@
 #include "JuceHeader.h"
 #include "TinCanInstruments.h"
 #include "TinCanNotes.h"
+#include "TinCanSummaries.h"
 
 #include <functional>
 
@@ -156,13 +157,20 @@ class ToolsWindow : public DocumentWindow
 {
 public:
     ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                std::function<void()> openWorkspace, std::function<void()> onClose);
+                std::function<void()> openWorkspace, SummaryHooks summaryHooks, std::function<void()> onClose);
     ~ToolsWindow() override;
 
     void closeButtonPressed() override;
 
+    // bring the Summaries tab forward with this lesson summary selected (T-046)
+    void showSummary(const File & summaryFile);
+    // reload the Summaries tab, e.g. after a recording finished
+    void refreshSummaries();
+
 private:
     std::function<void()> onClose;
+    TabbedComponent * tabs = nullptr;
+    SummariesPanel * summaries = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ToolsWindow)
 };

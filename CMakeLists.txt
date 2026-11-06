@@ -388,6 +388,10 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanVideo.h
         Source/TinCanWorkspace.cpp
         Source/TinCanWorkspace.h
+        Source/TinCanRecording.cpp
+        Source/TinCanRecording.h
+        Source/TinCanSummaries.cpp
+        Source/TinCanSummaries.h
         Source/VDONinjaView.h
         Source/VersionInfo.cpp
         Source/VersionInfo.h
@@ -745,8 +749,10 @@ juce_generate_juce_header(TinCanAudioTests)
 set_target_properties(TinCanAudioTests PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_sources(TinCanAudioTests PRIVATE
     tests/TinCanMetronomeTest.cpp
+    tests/TinCanRecordingTest.cpp
     Source/Metronome.cpp
-    Source/TinCanBeatClock.cpp)
+    Source/TinCanBeatClock.cpp
+    Source/TinCanRecording.cpp)
 target_compile_definitions(TinCanAudioTests PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0

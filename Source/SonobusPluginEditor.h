@@ -576,6 +576,32 @@ private:
     void showWorkspace();
     String mLessonTitle;
 
+    // lesson recording with everyone's consent, highlights and summaries (T-045, T-046)
+    enum class RecordingCause { Local, Remote, Joined, Left };
+    void onRecordPressed();
+    bool startLocalRecording();
+    void stopLocalRecording();
+    void saveLessonSummary(double durationSeconds, bool showIt);
+    void applyRecording(const TinCan::RecordingConsent::Result & r, RecordingCause cause);
+    void sendRecordingMessages(const TinCan::RecordingConsent::Result & r);
+    void handleRecordingMessages();
+    void showRecordQuestion(const String & who);
+    void dismissRecordQuestion();
+    void markPressed();
+    String getMyLessonName() const;
+    StringArray getPeerNames() const;
+    File getRecordingFolder() const;
+    TinCan::SummaryHooks makeSummaryHooks();
+
+    TinCan::RecordingConsent mRecordingConsent;
+    Array<TinCan::Highlight> mHighlights;
+    StringArray mRecordingPeople;
+    Time mRecordingStarted;
+    std::unique_ptr<TextButton> mMarkButton;
+    std::unique_ptr<AlertWindow> mRecordQuestion;
+    CriticalSection mRecordingMsgLock;
+    StringArray mRecordingMsgFrom, mRecordingMsgJson;  // received on the network thread
+
     std::unique_ptr<TableListBox> mRemoteSinkListBox;
     std::unique_ptr<TableListBox> mRemoteSourceListBox;
     

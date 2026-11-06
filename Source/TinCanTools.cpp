@@ -650,16 +650,18 @@ private:
 };
 
 ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                         std::function<void()> openWorkspace, std::function<void()> onCloseFunc)
+                         std::function<void()> openWorkspace, SummaryHooks summaryHooks, std::function<void()> onCloseFunc)
     : DocumentWindow(TRANS("Teaching tools"), Colour(0xff1c1c1c), DocumentWindow::allButtons),
       onClose(std::move(onCloseFunc))
 {
-    auto * tabs = new TabbedComponent(TabbedButtonBar::TabsAtTop);
+    tabs = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabs->setTabBarDepth(28);
     tabs->addTab(TRANS("Instrument"), Colour(0xff1c1c1c), new InstrumentPanel(processor, getDeviceManager), true);
     tabs->addTab(TRANS("Tuner"), Colour(0xff1c1c1c), new TunerPanel(processor), true);
     tabs->addTab(TRANS("Metronome"), Colour(0xff1c1c1c), new MetronomePanel(processor), true);
     tabs->addTab(TRANS("Workspace"), Colour(0xff1c1c1c), new WorkspacePanel(std::move(openWorkspace)), true);
+    summaries = new SummariesPanel(std::move(summaryHooks));
+    tabs->addTab(TRANS("Summaries"), Colour(0xff1c1c1c), summaries, true);
 
     setUsingNativeTitleBar(true);
     setContentOwned(tabs, false);
@@ -677,6 +679,18 @@ ToolsWindow::~ToolsWindow()
 void ToolsWindow::closeButtonPressed()
 {
     if (onClose) onClose();
+}
+
+void ToolsWindow::showSummary(const File & summaryFile)
+{
+    tabs->setCurrentTabIndex(tabs->getNumTabs() - 1);
+    summaries->refresh(summaryFile);
+    toFront(true);
+}
+
+void ToolsWindow::refreshSummaries()
+{
+    summaries->refresh();
 }
 
 }

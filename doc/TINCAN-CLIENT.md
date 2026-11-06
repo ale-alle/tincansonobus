@@ -88,5 +88,8 @@ For testing between two homes, a throwaway Toronto server (stock aooserver + Liv
 ### Lesson workspace (T-037)
 *Workspace* tab → *Open the workspace*: a board of images and whiteboards with pen, highlighter, arrows and text, in WebView2. Local only for now; PDFs and sharing wait on two owner decisions. Details, tests and the decisions: [TINCAN-WORKSPACE.md](TINCAN-WORKSPACE.md).
 
+### Recording, highlights and summaries (T-045, T-046)
+*Record* asks everyone first; once all agree, every computer records its own copy. *Mark* adds shared highlights. When it stops, *Summaries* tab lists the lesson with its highlights; picking one plays the recording from there. Details and tests: [TINCAN-RECORDING.md](TINCAN-RECORDING.md). Screen / second-camera share (T-044) is in the video window: [TINCAN-VIDEO.md](TINCAN-VIDEO.md).
+
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.

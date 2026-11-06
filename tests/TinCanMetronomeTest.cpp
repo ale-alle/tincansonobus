@@ -27,6 +27,8 @@ static AudioBuffer<float> loadWav(const File & f, MemoryBlock & raw)
     return buf;
 }
 
+int runRecordingTests();  // TinCanRecordingTest.cpp
+
 struct Expected { int64 sample; const AudioBuffer<float> * sound; float gain; };
 
 static void addClick(std::vector<float> & out, const Expected & e)
@@ -144,6 +146,8 @@ int main()
         auto out = render(*m, rate, 1.0, 512, false);
         CHECK(maxDiff(out, std::vector<float>(out.size(), 0.0f)) == 0.0f);
     }
+
+    failures += runRecordingTests();
 
     if (failures == 0) {
         std::printf("TinCanAudioTests: all checks passed\n");

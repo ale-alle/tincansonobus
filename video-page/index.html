@@ -5,7 +5,9 @@
      CanDuet in-lesson video (T-009). Shown inside the app's video window (WebView2).
      The app opens  <this page>#url=<wss://…>&token=<LiveKit JWT>&name=<display name>
      The fragment never reaches a server; the page removes it from the address as soon as it loads.
-     Video only: the microphone is never requested. Lesson audio stays on CanDuet's low-latency path. -->
+     Video only: the microphone is never requested. Lesson audio stays on CanDuet's low-latency path.
+     Either person can share one extra view (T-044): their screen or a window, or a second camera
+     (hands at the keys, music on the stand). It is published as LiveKit's screen-share source. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -26,7 +28,17 @@
           aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 2px solid var(--panel);
           background: #000; transform: scaleX(-1); }
   #self.unmirrored { transform: none; }
-  #self[hidden], #remote[hidden] { display: none; }
+  /* the other person's camera, small, while they share a view */
+  #remoteCam { position: absolute; left: 12px; bottom: 64px; width: 24%; max-width: 280px; min-width: 120px;
+               aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 2px solid var(--panel); background: #000; }
+  #self[hidden], #remote[hidden], #remoteCam[hidden], #shareMenu[hidden], #sharing[hidden] { display: none; }
+  #sharing { position: absolute; left: 12px; top: 12px; padding: 4px 10px; border-radius: 999px;
+             background: var(--accent); color: #111317; font-weight: 600; }
+  #shareMenu { position: absolute; left: 12px; bottom: 58px; display: flex; flex-direction: column; gap: 4px;
+               padding: 6px; background: var(--panel); border: 1px solid #3a404c; border-radius: 8px; min-width: 240px; }
+  #shareMenu button { text-align: left; }
+  #shareMenu button:disabled { color: var(--muted); }
+  #share[aria-pressed="true"] { border-color: var(--accent); }
   #status { position: absolute; inset: 0 0 52px 0; display: grid; place-items: center; text-align: center;
             padding: 16px; color: var(--muted); font-size: 16px; pointer-events: none; }
   #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; display: flex; gap: 8px;
@@ -44,22 +56,29 @@
 <body>
 <main id="stage" aria-label="Lesson video">
   <video id="remote" autoplay playsinline muted hidden></video>
+  <video id="remoteCam" autoplay playsinline muted hidden aria-label="The other person's camera"></video>
   <video id="self" autoplay playsinline muted hidden aria-label="Your camera"></video>
+  <div id="sharing" role="status" hidden></div>
 </main>
 <div id="status" role="status" aria-live="polite">Starting video…</div>
 <div id="bar">
   <button id="cam" type="button" aria-pressed="true">Camera on</button>
   <select id="camera" aria-label="Camera"></select>
+  <button id="share" type="button" aria-haspopup="menu" aria-expanded="false" aria-pressed="false">Share…</button>
   <button id="mirror" type="button" aria-pressed="true" title="Flip your own preview (others always see you the right way round)">Mirror me</button>
   <span class="spacer"></span>
   <span id="who"></span>
+</div>
+<div id="shareMenu" role="menu" aria-label="Share" hidden>
+  <button id="shareScreen" type="button" role="menuitem">Share my screen or a window</button>
+  <div id="secondCams"></div>
 </div>
 <script>
 "use strict";
 (function () {
   const LK = window.LivekitClient;
   const $ = (id) => document.getElementById(id);
-  const remoteEl = $("remote"), selfEl = $("self"), statusEl = $("status");
+  const remoteEl = $("remote"), remoteCamEl = $("remoteCam"), selfEl = $("self"), statusEl = $("status");
 
   // read and immediately forget the connection details
   const params = new URLSearchParams(location.hash.slice(1));
@@ -69,7 +88,8 @@
   const myName = (params.get("name") || "").slice(0, 80);
 
   // small read-only state for support and automated checks
-  const state = window.canduetVideo = { phase: "starting", remoteName: "", remoteVideo: false, localVideo: false, error: "" };
+  const state = window.canduetVideo = { phase: "starting", remoteName: "", remoteVideo: false, localVideo: false, error: "",
+                                        localShare: "", remoteShare: "" };  // share: "", "screen" or "camera"
 
   function setStatus(text) {
     statusEl.textContent = text;
@@ -92,27 +112,133 @@
     publishDefaults: { simulcast: true, videoCodec: "vp8" },
   });
 
+  // show one track in a video element, detaching whatever it showed before
+  function put(el, track) {
+    if (el._track === track) return;
+    if (el._track) el._track.detach(el);
+    el._track = track || null;
+    if (track) track.attach(el);
+    el.hidden = !track;
+  }
+
+  const SHARE = LK.Track.Source.ScreenShare;
+  const SECOND_CAMERA = "second-camera";  // track name of a second camera published as a shared view
+
+  // the other person's camera and shared view: a shared view goes large, their camera small
   function showRemote() {
-    let found = null;
+    let cam = null, share = null;
     room.remoteParticipants.forEach((p) => {
       p.trackPublications.forEach((pub) => {
-        if (!found && pub.kind === "video" && pub.track && !pub.isMuted) found = { p, track: pub.track };
+        if (pub.kind !== "video" || !pub.track || pub.isMuted) return;
+        if (pub.source === SHARE) { if (!share) share = { p, track: pub.track, kind: pub.trackName === SECOND_CAMERA ? "camera" : "screen" }; }
+        else if (!cam) cam = { p, track: pub.track };
       });
     });
-    if (found) {
-      found.track.attach(remoteEl);
-      remoteEl.hidden = false;
-      state.remoteVideo = true;
-      state.remoteName = found.p.name || "";
-      $("who").textContent = found.p.name ? "With " + found.p.name : "";
+    const main = share || cam;
+    put(remoteEl, main && main.track);
+    put(remoteCamEl, share && cam ? cam.track : null);
+    state.remoteVideo = !!cam;
+    state.remoteShare = share ? share.kind : "";
+    if (main) {
+      state.remoteName = main.p.name || "";
+      $("who").textContent = main.p.name ? "With " + main.p.name : "";
       setStatus("");
     } else {
-      remoteEl.hidden = true;
-      state.remoteVideo = false;
       const others = room.remoteParticipants.size;
       setStatus(others ? "The other person's camera is off." : "Waiting for the other person to turn on video…");
     }
   }
+
+  // ---- sharing a view (T-044) ----
+  let shareTrack = null;  // a second camera we publish ourselves
+
+  function updateShareUI() {
+    const kind = state.localShare;
+    $("share").textContent = kind ? "Stop sharing" : "Share…";
+    $("share").setAttribute("aria-pressed", String(!!kind));
+    $("share").setAttribute("aria-haspopup", kind ? "false" : "menu");
+    $("sharing").textContent = kind === "screen" ? "You're sharing your screen" : kind === "camera" ? "You're sharing your second camera" : "";
+    $("sharing").hidden = !kind;
+  }
+
+  function closeShareMenu() {
+    $("shareMenu").hidden = true;
+    $("share").setAttribute("aria-expanded", "false");
+  }
+
+  async function openShareMenu() {
+    let cams = [];
+    try { cams = await LK.Room.getLocalDevices("videoinput", false); } catch (_) {}
+    const active = room.getActiveDevice("videoinput");
+    const others = cams.filter((c) => c.deviceId !== active);
+    const items = others.map((c, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.setAttribute("role", "menuitem");
+      b.textContent = "Share second camera: " + (c.label || "Camera " + (i + 2));
+      b.addEventListener("click", () => { closeShareMenu(); startSecondCamera(c.deviceId); });
+      return b;
+    });
+    if (!items.length) {
+      const b = document.createElement("button");
+      b.type = "button"; b.disabled = true;
+      b.textContent = "Second camera: plug one in to share it";
+      items.push(b);
+    }
+    $("secondCams").replaceChildren(...items);
+    $("shareMenu").hidden = false;
+    $("share").setAttribute("aria-expanded", "true");
+    $("shareScreen").focus();
+  }
+
+  async function startScreenShare() {
+    try {
+      await room.localParticipant.setScreenShareEnabled(true, { audio: false, selfBrowserSurface: "exclude" });
+      if (room.localParticipant.getTrackPublication(SHARE)) state.localShare = "screen";
+    } catch (e) {
+      // NotAllowedError: the person closed the picker; nothing to say
+      if (!e || e.name !== "NotAllowedError") setStatus("Your screen couldn't be shared. Try again, or share a single window.");
+    }
+    updateShareUI();
+  }
+
+  async function startSecondCamera(deviceId) {
+    try {
+      shareTrack = await LK.createLocalVideoTrack({ deviceId, resolution: LK.VideoPresets.h720.resolution });
+      shareTrack.mediaStreamTrack.addEventListener("ended", stopShare);  // camera unplugged
+      await room.localParticipant.publishTrack(shareTrack, { source: SHARE, name: SECOND_CAMERA, simulcast: true });
+      state.localShare = "camera";
+    } catch (e) {
+      if (shareTrack) { shareTrack.stop(); shareTrack = null; }
+      setStatus("That camera couldn't start. Close other apps that use it, or pick another one.");
+    }
+    updateShareUI();
+  }
+
+  async function stopShare() {
+    try {
+      if (shareTrack) {
+        const t = shareTrack; shareTrack = null;
+        await room.localParticipant.unpublishTrack(t);
+        t.stop();
+      } else {
+        await room.localParticipant.setScreenShareEnabled(false);
+      }
+    } catch (_) {}
+    state.localShare = "";
+    updateShareUI();
+  }
+
+  $("share").addEventListener("click", () => {
+    if (state.localShare) return stopShare();
+    if ($("shareMenu").hidden) openShareMenu(); else closeShareMenu();
+  });
+  $("shareScreen").addEventListener("click", () => { closeShareMenu(); startScreenShare(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("shareMenu").hidden) { closeShareMenu(); $("share").focus(); }
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (!$("shareMenu").hidden && !$("shareMenu").contains(e.target) && e.target !== $("share")) closeShareMenu();
+  });
 
   async function startCamera(deviceId) {
     try {
@@ -171,6 +297,13 @@
   room
     .on(LK.RoomEvent.TrackSubscribed, showRemote)
     .on(LK.RoomEvent.TrackUnsubscribed, showRemote)
+    .on(LK.RoomEvent.LocalTrackUnpublished, (pub) => {
+      // also fires when the person presses the browser's own "Stop sharing"
+      if (pub.source === SHARE) {
+        if (shareTrack) { shareTrack.stop(); shareTrack = null; }
+        state.localShare = ""; updateShareUI();
+      }
+    })
     .on(LK.RoomEvent.TrackMuted, showRemote)
     .on(LK.RoomEvent.TrackUnmuted, showRemote)
     .on(LK.RoomEvent.ParticipantConnected, showRemote)
