@@ -5,6 +5,7 @@
 
 
 #include "JuceHeader.h"
+#include "TinCanTheme.h"
 
 
 class SonoLookAndFeel   : public LookAndFeel_V4, public foleys::LevelMeter::LookAndFeelMethods

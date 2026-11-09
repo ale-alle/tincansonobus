@@ -18,7 +18,9 @@
         integrity="sha384-ejH14wPQkwwyImo2LYdigxCruyGOymTSDatUhlPFHPulPcrMglpJOjRVTMYqZYqQ"
         crossorigin="anonymous"></script>
 <style>
-  :root { --bg: #111317; --panel: #1c1f26; --text: #eef0f4; --muted: #9aa3b2; --accent: #f2a541; --danger: #e5645a; }
+  /* Colours match tincanstudios.ca night palette (Source/TinCanTheme.h) */
+  :root { --bg: #0a0f1e; --panel: #121a2e; --raised: #1a2440; --line: #3a4a75; --text: #e8ecf6; --muted: #b4bed6;
+          --accent: #e5484d; --accent-strong: #d7263d; --danger: #e5645a; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
                font: 14px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
@@ -33,17 +35,17 @@
                aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 2px solid var(--panel); background: #000; }
   #self[hidden], #remote[hidden], #remoteCam[hidden], #shareMenu[hidden], #sharing[hidden] { display: none; }
   #sharing { position: absolute; left: 12px; top: 12px; padding: 4px 10px; border-radius: 999px;
-             background: var(--accent); color: #111317; font-weight: 600; }
+             background: var(--accent-strong); color: #fff; font-weight: 600; }
   #shareMenu { position: absolute; left: 12px; bottom: 58px; display: flex; flex-direction: column; gap: 4px;
-               padding: 6px; background: var(--panel); border: 1px solid #3a404c; border-radius: 8px; min-width: 240px; }
+               padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 240px; }
   #shareMenu button { text-align: left; }
   #shareMenu button:disabled { color: var(--muted); }
-  #share[aria-pressed="true"] { border-color: var(--accent); }
+  #share[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-strong); color: #fff; }
   #status { position: absolute; inset: 0 0 52px 0; display: grid; place-items: center; text-align: center;
             padding: 16px; color: var(--muted); font-size: 16px; pointer-events: none; }
   #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; display: flex; gap: 8px;
          align-items: center; padding: 0 12px; background: var(--panel); }
-  button, select { font: inherit; color: var(--text); background: #2a2f39; border: 1px solid #3a404c;
+  button, select { font: inherit; color: var(--text); background: var(--raised); border: 1px solid var(--line);
                    border-radius: 6px; padding: 6px 12px; min-height: 34px; }
   button:hover, select:hover { border-color: var(--muted); }
   button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

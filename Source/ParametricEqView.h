@@ -5,6 +5,7 @@
 #pragma once
 
 #include "JuceHeader.h"
+#include "TinCanTheme.h"
 
 #include "SonoLookAndFeel.h"
 #include "SonoDrawableButton.h"
@@ -581,7 +582,7 @@ private:
     bool para2Active = false;
     
     Colour bgfillcol = { Colour::fromFloatRGBA(0.08, 0.08, 0.08, 0.0) };
-    Colour bgactfillcol = { Colour::fromFloatRGBA(0.08, 0.09, 0.1, 1.0) };
+    Colour bgactfillcol = { TinCanTheme::surface };
     Colour bgstrokecol = { Colour::fromFloatRGBA(0.5, 0.5, 0.5, 0.25) };
     Colour bgactstrokecol = { Colour::fromFloatRGBA(0.6, 0.6, 0.6, 0.55) };
 

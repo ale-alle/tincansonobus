@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanVideo.h"
+#include "TinCanTheme.h"
 #include "TinCanJoin.h"
 
 namespace TinCan {
@@ -114,7 +115,7 @@ public:
         addAndMakeVisible(installLink);
     }
 
-    void paint(Graphics & g) override { g.fillAll(Colour(0xff111317)); }
+    void paint(Graphics & g) override { g.fillAll(TinCanTheme::night); }
 
     void resized() override
     {
@@ -148,7 +149,7 @@ WebBrowserComponent::Options makeWebViewOptions()
 VideoWindow::VideoWindow(const String & title, const VideoInfo & video, const String & displayName,
                          std::function<void()> onClose_)
     : DocumentWindow(title.isNotEmpty() ? title + " - " + TRANS("Video") : TRANS("Lesson video"),
-                     Colour(0xff111317), DocumentWindow::allButtons),
+                     TinCanTheme::night, DocumentWindow::allButtons),
       onClose(std::move(onClose_))
 {
     setUsingNativeTitleBar(true);

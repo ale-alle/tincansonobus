@@ -6,6 +6,7 @@
 #include "SonoDrawableButton.h"
 //#include "ConfigurationRowView.h"
 #include "SonoTextButton.h"
+#include "TinCanTheme.h"
 
 #include <JuceHeader.h>
 
@@ -54,70 +55,71 @@ SonoLookAndFeel::SonoLookAndFeel(bool useUniversalFont) : mUseUniversalFont(useU
 
     setColourScheme(getDarkColourScheme());
 
-    getCurrentColourScheme().setUIColour(ColourScheme::UIColour::windowBackground, Colour::fromFloatRGBA(0.0, 0.0, 0.0, 1.0));
-    getCurrentColourScheme().setUIColour(ColourScheme::UIColour::widgetBackground, Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0));
-    getCurrentColourScheme().setUIColour(ColourScheme::UIColour::outline, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
+    getCurrentColourScheme().setUIColour(ColourScheme::UIColour::windowBackground, TinCanTheme::night);
+    getCurrentColourScheme().setUIColour(ColourScheme::UIColour::widgetBackground, TinCanTheme::surface);
+    getCurrentColourScheme().setUIColour(ColourScheme::UIColour::outline, TinCanTheme::line);
 
-    setColour (Label::textColourId, Colour (0xffcccccc));
-    setColour (Label::textWhenEditingColourId, Colour (0xffe9e9e9));
+    setColour (Label::textColourId, TinCanTheme::muted);
+    setColour (Label::textWhenEditingColourId, TinCanTheme::text);
     
-    setColour(ResizableWindow::backgroundColourId, Colour(0xff111111));
+    setColour(ResizableWindow::backgroundColourId, TinCanTheme::night);
     
     //setColour (TextButton::buttonColourId, Colour (0xff363636));
-    setColour (TextButton::buttonColourId, Colour::fromFloatRGBA(0.15, 0.15, 0.15, 0.7)); // old one
+    setColour (TextButton::buttonColourId, TinCanTheme::raised.withAlpha(0.85f));
     //setColour (TextButton::buttonColourId, Colour::fromFloatRGBA(0.15, 0.15, 0.15, 0.0));
     //setColour (TextButton::buttonOnColourId, Colour (0xff3d70c8));
-    setColour (TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.5, 0.4, 0.6, 0.8));
-    setColour (TextButton::textColourOnId, Colour (0xddcccccc));
-    setColour (TextButton::textColourOffId, Colour (0xdde9e9e9));
+    setColour (TextButton::buttonOnColourId, TinCanTheme::stringStrong);
+    setColour (TextButton::textColourOnId, Colours::white);
+    setColour (TextButton::textColourOffId, TinCanTheme::text);
 
-    setColour (ToggleButton::textColourId, Colour (0xddcccccc));
+    setColour (ToggleButton::textColourId, TinCanTheme::muted);
 
     
-    setColour (SonoTextButton::outlineColourId, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
+    setColour (SonoTextButton::outlineColourId, TinCanTheme::line);
 
-    setColour (ScrollBar::ColourIds::thumbColourId, Colour::fromFloatRGBA(0.4, 0.4, 0.4, 0.6));
+    setColour (ScrollBar::ColourIds::thumbColourId, TinCanTheme::lineStrong);
     
     //setColour (ComboBox::backgroundColourId, Colour (0xff161616));
-    setColour (ComboBox::backgroundColourId, Colour::fromFloatRGBA(0.15, 0.15, 0.15, 0.7));
-    setColour (ComboBox::textColourId, Colour (0xffe9e9e9));
-    setColour (ComboBox::outlineColourId, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
+    setColour (ComboBox::backgroundColourId, TinCanTheme::raised.withAlpha(0.85f));
+    setColour (ComboBox::textColourId, TinCanTheme::text);
+    setColour (ComboBox::outlineColourId, TinCanTheme::line);
 
-    setColour (TextEditor::backgroundColourId, Colour (0xff050505));
-    setColour (TextEditor::textColourId, Colour (0xffe9e9e9));
-    setColour (TextEditor::highlightColourId, Colour (0xff5959f9));
-    setColour (TextEditor::outlineColourId, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
-    setColour (TextEditor::focusedOutlineColourId, Colour::fromFloatRGBA(0.5, 0.5, 0.5, 0.7));
+    setColour (TextEditor::backgroundColourId, TinCanTheme::field);
+    setColour (TextEditor::textColourId, TinCanTheme::text);
+    setColour (TextEditor::highlightColourId, TinCanTheme::string.withAlpha(0.45f));
+    setColour (TextEditor::outlineColourId, TinCanTheme::line);
+    setColour (TextEditor::focusedOutlineColourId, TinCanTheme::string);
 
-    setColour (Slider::backgroundColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 1.0));
-    setColour (Slider::rotarySliderOutlineColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 1.0));
-    setColour (Slider::textBoxTextColourId, Colour(0xddcccccc));
-    setColour (Slider::textBoxBackgroundColourId, Colour::fromFloatRGBA(0.05, 0.05, 0.05, 1.0));
-    setColour (Slider::textBoxHighlightColourId, Colour (0xaa555555));
-    setColour (Slider::textBoxOutlineColourId, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
+    setColour (Slider::backgroundColourId, TinCanTheme::line);
+    setColour (Slider::rotarySliderOutlineColourId, TinCanTheme::line);
+    setColour (Slider::textBoxTextColourId, TinCanTheme::muted);
+    setColour (Slider::textBoxBackgroundColourId, TinCanTheme::field);
+    setColour (Slider::textBoxHighlightColourId, TinCanTheme::string.withAlpha(0.45f));
+    setColour (Slider::textBoxOutlineColourId, TinCanTheme::line);
     
-    setColour (Slider::trackColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.8));
-    setColour (Slider::thumbColourId, Colour::fromFloatRGBA(0.5, 0.4, 0.6, 0.9));
+    setColour (Slider::trackColourId, TinCanTheme::string.withAlpha(0.8f));
+    setColour (Slider::thumbColourId, TinCanTheme::stringLight);
     //setColour (Slider::thumbColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 1.0));
-    setColour (Slider::rotarySliderFillColourId, Colour::fromFloatRGBA(0.5, 0.4, 0.6, 0.9));
+    setColour (Slider::rotarySliderFillColourId, TinCanTheme::string);
     
-    setColour (TabbedButtonBar::tabOutlineColourId, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
+    setColour (TabbedButtonBar::tabOutlineColourId, TinCanTheme::line);
 
 
     
-    setColour (ListBox::backgroundColourId, Colour::fromFloatRGBA(0.15, 0.15, 0.15, 0.7));
-    setColour (ListBox::outlineColourId, Colour::fromFloatRGBA(0.3, 0.3, 0.3, 0.5));
+    setColour (ListBox::backgroundColourId, TinCanTheme::surface);
+    setColour (ListBox::outlineColourId, TinCanTheme::line);
 
-    setColour (BubbleComponent::backgroundColourId, Colour::fromFloatRGBA(0.25, 0.25, 0.25, 1.0));
-    setColour (BubbleComponent::outlineColourId, Colour::fromFloatRGBA(0.4, 0.4, 0.4, 0.5));
+    setColour (BubbleComponent::backgroundColourId, TinCanTheme::raised);
+    setColour (BubbleComponent::outlineColourId, TinCanTheme::lineStrong);
     //setColour (TooltipWindow::textColourId, Colour(0xeecccccc));
-    setColour (TooltipWindow::textColourId, Colour(0xee222222));
-    setColour (TooltipWindow::backgroundColourId, Colour(0xeeffff99));
+    setColour (TooltipWindow::textColourId, TinCanTheme::text);
+    setColour (TooltipWindow::backgroundColourId, TinCanTheme::raised);
+    setColour (TooltipWindow::outlineColourId, TinCanTheme::lineStrong);
 
-    setColour (PopupMenu::backgroundColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 1.0));
-    setColour (PopupMenu::highlightedBackgroundColourId, Colour::fromFloatRGBA(0.35, 0.35, 0.4, 1.0));
+    setColour (PopupMenu::backgroundColourId, TinCanTheme::surface);
+    setColour (PopupMenu::highlightedBackgroundColourId, TinCanTheme::line);
 
-    setColour (SidePanel::backgroundColour, Colour::fromFloatRGBA(0.17, 0.17, 0.17, 1.0));
+    setColour (SidePanel::backgroundColour, TinCanTheme::surface);
 
 
     
@@ -126,19 +128,19 @@ SonoLookAndFeel::SonoLookAndFeel(bool useUniversalFont) : mUseUniversalFont(useU
     setColour (SonoDrawableButton::overOverlayColourId, Colour::fromFloatRGBA(0.8, 0.8, 0.8, 0.08));
     setColour (SonoDrawableButton::downOverlayColourId, Colour::fromFloatRGBA(0.8, 0.8, 0.8, 0.3));
     
-    setColour (DrawableButton::textColourId, Colour (0xffb9b9b9));
-    setColour (DrawableButton::textColourOnId, Colour (0xffe9e9e9));
+    setColour (DrawableButton::textColourId, TinCanTheme::muted);
+    setColour (DrawableButton::textColourOnId, TinCanTheme::text);
 
     //setColour (DrawableButton::backgroundColourId, Colour (0xffb9b9b9));
-    setColour (DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.5, 0.4, 0.6, 0.8));
+    setColour (DrawableButton::backgroundOnColourId, TinCanTheme::stringStrong);
 
     //setColour (ConfigurationRowView::backgroundColourId, Colour::fromFloatRGBA(0.05, 0.05, 0.05, 1.0));
     //setColour (ConfigurationRowView::selectedBackgroundColourId, Colour::fromFloatRGBA(0.15, 0.15, 0.15, 1.0));
 
-    setColour(ToggleButton::tickColourId, Colour::fromFloatRGBA(0.4, 0.8, 1.0, 1.0));
+    setColour(ToggleButton::tickColourId, TinCanTheme::stringLight);
     
-    setColour (DirectoryContentsDisplayComponent::highlightColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.9));
-    setColour (DirectoryContentsDisplayComponent::textColourId, Colour (0xffe9e9e9));
+    setColour (DirectoryContentsDisplayComponent::highlightColourId, TinCanTheme::line);
+    setColour (DirectoryContentsDisplayComponent::textColourId, TinCanTheme::text);
     // setColour (Label::textColourId, Colour (0xffe9e9e9));
 
     //myFont = Typeface::createSystemTypefaceFor (BinaryData::DejaVuSans_ttf, BinaryData::DejaVuSans_ttfSize);
@@ -403,7 +405,7 @@ void SonoLookAndFeel::drawTabButton (TabBarButton& button, Graphics& g, bool isM
     const TabbedButtonBar::Orientation o = button.getTabbedButtonBar().getOrientation();
     
     const Colour bkg (button.getTabBackgroundColour());
-    const Colour selcol = Colour::fromFloatRGBA(0.0f, 0.2f, 0.4f, 1.0f);
+    const Colour selcol = TinCanTheme::line;
 
     // DBG("Sono draw tab button");
     
@@ -1472,11 +1474,11 @@ void SonoBigTextLookAndFeel::drawToggleButton (Graphics& g, ToggleButton& button
 SonoPanSliderLookAndFeel::SonoPanSliderLookAndFeel(float maxTextSize)
 : maxSize(maxTextSize)
 {
-    setColour (TooltipWindow::textColourId, Colour(0xeecccccc));
+    setColour (TooltipWindow::textColourId, TinCanTheme::text);
    // setColour (TooltipWindow::backgroundColourId, Colour(0xeeffff99));
     //setColour (Slider::textBoxBackgroundColourId, Colour::fromFloatRGBA(0.05, 0.05, 0.05, 1.0));
     setColour (Slider::textBoxBackgroundColourId, Colours::transparentBlack);
-    setColour (Slider::textBoxHighlightColourId, Colour (0xaa555555));
+    setColour (Slider::textBoxHighlightColourId, TinCanTheme::string.withAlpha(0.45f));
     setColour (Slider::textBoxOutlineColourId, Colours::transparentBlack);
 
 }

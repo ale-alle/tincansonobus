@@ -57,7 +57,7 @@ void setupDefaultMeterColours () override
     setColour (foleys::LevelMeter::lmBackgroundClipColour,   juce::Colours::red);
     setColour (foleys::LevelMeter::lmMeterForegroundColour,  juce::Colours::green);
     setColour (foleys::LevelMeter::lmMeterOutlineColour,     juce::Colour(0x55909090));
-    setColour (foleys::LevelMeter::lmMeterBackgroundColour,  juce::Colour(0xff000000));
+    setColour (foleys::LevelMeter::lmMeterBackgroundColour,  TinCanTheme::field);
     setColour (foleys::LevelMeter::lmMeterMaxNormalColour,   juce::Colours::lightgrey);
     setColour (foleys::LevelMeter::lmMeterMaxWarnColour,     juce::Colours::orange);
     setColour (foleys::LevelMeter::lmMeterMaxOverColour,     juce::Colours::darkred);

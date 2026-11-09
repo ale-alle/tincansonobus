@@ -4,6 +4,7 @@
 
 
 #include "SuggestNewGroupView.h"
+#include "TinCanTheme.h"
 #include "GenericItemChooser.h"
 
 SuggestNewGroupView::SuggestNewGroupView(SonobusAudioProcessor& proc) :  smallLNF(14), processor(proc)
@@ -92,7 +93,7 @@ SuggestNewGroupView::SuggestNewGroupView(SonobusAudioProcessor& proc) :  smallLN
 
     mRequestButton = std::make_unique<TextButton>("x");
     mRequestButton->setButtonText(TRANS("Suggest and Connect to Group"));
-    mRequestButton->setColour(TextButton::buttonColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.6));
+    mRequestButton->setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
 
     mRequestButton->onClick = [this]() {
         if (mGroupEditor->getText().isEmpty()) {
@@ -123,7 +124,7 @@ SuggestNewGroupView::SuggestNewGroupView(SonobusAudioProcessor& proc) :  smallLN
 
 
     mPeerRect = std::make_unique<DrawableRectangle>();
-    mPeerRect->setFill(Colour::fromFloatRGBA(0.0, 0.0, 0.0, 1.0));
+    mPeerRect->setFill(TinCanTheme::night);
     mPeerRect->setCornerSize(Point<float>(8,8));
 
     addAndMakeVisible(mRequestButton.get());

@@ -2,6 +2,7 @@
 // Copyright (C) 2021 Jesse Chappell
 
 #include "ConnectView.h"
+#include "TinCanTheme.h"
 
 #include "RandomSentenceGenerator.h"
 
@@ -39,7 +40,7 @@ recentsGroupFont (17.0 * SonoLookAndFeel::getFontScale(), Font::bold), recentsNa
 publicGroupsListModel(this)
 {
     setColour (nameTextColourId, Colour::fromFloatRGBA(1.0f, 1.0f, 1.0f, 0.9f));
-    setColour (selectedColourId, Colour::fromFloatRGBA(0.0f, 0.4f, 0.8f, 0.5f));
+    setColour (selectedColourId, TinCanTheme::lineStrong);
     setColour (separatorColourId, Colour::fromFloatRGBA(0.3f, 0.3f, 0.3f, 0.3f));
 
     mConnectTab = std::make_unique<SonobusConnectTabbedComponent>(TabbedButtonBar::Orientation::TabsAtTop, *this);
@@ -65,10 +66,10 @@ publicGroupsListModel(this)
     mRecentsGroup->setColour(GroupComponent::outlineColourId, Colour::fromFloatRGBA(0.8, 0.8, 0.8, 0.1));
     mRecentsGroup->setTextLabelPosition(Justification::centred);
 
-    mConnectTab->addTab(TRANS("RECENTS"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mRecentsContainer.get(), false);
-    mConnectTab->addTab(TRANS("PRIVATE GROUP"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mServerConnectViewport.get(), false);
-    mConnectTab->addTab(TRANS("PUBLIC GROUPS"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mPublicServerConnectContainer.get(), false);
-    //mConnectTab->addTab(TRANS("DIRECT"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mDirectConnectContainer.get(), false);
+    mConnectTab->addTab(TRANS("RECENTS"), TinCanTheme::surface, mRecentsContainer.get(), false);
+    mConnectTab->addTab(TRANS("PRIVATE GROUP"), TinCanTheme::surface, mServerConnectViewport.get(), false);
+    mConnectTab->addTab(TRANS("PUBLIC GROUPS"), TinCanTheme::surface, mPublicServerConnectContainer.get(), false);
+    //mConnectTab->addTab(TRANS("DIRECT"), TinCanTheme::surface, mDirectConnectContainer.get(), false);
 
 
 
@@ -102,7 +103,7 @@ publicGroupsListModel(this)
     mConnectTitle->setColour(Label::textColourId, Colour(0x66ffffff));
 
     mConnectComponentBg = std::make_unique<DrawableRectangle>();
-    mConnectComponentBg->setFill (Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0));
+    mConnectComponentBg->setFill (TinCanTheme::surface);
 
     mConnectCloseButton = std::make_unique<SonoDrawableButton>("x", DrawableButton::ButtonStyle::ImageFitted);
     std::unique_ptr<Drawable> ximg(Drawable::createFromImageData(BinaryData::x_icon_svg, BinaryData::x_icon_svgSize));
@@ -122,14 +123,14 @@ publicGroupsListModel(this)
     mDirectConnectButton = std::make_unique<TextButton>("directconnect");
     mDirectConnectButton->setButtonText(TRANS("Direct Connect"));
     mDirectConnectButton->addListener(this);
-    mDirectConnectButton->setColour(TextButton::buttonColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.6));
+    mDirectConnectButton->setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
     mDirectConnectButton->setWantsKeyboardFocus(true);
 
 
     mServerConnectButton = std::make_unique<TextButton>("serverconnect");
     mServerConnectButton->setButtonText(TRANS("Connect to Group"));
     mServerConnectButton->addListener(this);
-    mServerConnectButton->setColour(TextButton::buttonColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.6));
+    mServerConnectButton->setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
     mServerConnectButton->setWantsKeyboardFocus(true);
 
     mServerHostEditor = std::make_unique<TextEditor>("srvaddredit");
@@ -317,7 +318,7 @@ publicGroupsListModel(this)
     mPublicServerAddGroupButton = std::make_unique<TextButton>("addgroup");
     mPublicServerAddGroupButton->setButtonText(TRANS("Create Group..."));
     mPublicServerAddGroupButton->addListener(this);
-    mPublicServerAddGroupButton->setColour(TextButton::buttonColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.6));
+    mPublicServerAddGroupButton->setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
     mPublicServerAddGroupButton->setWantsKeyboardFocus(true);
 
     mPublicServerGroupEditor = std::make_unique<TextEditor>("pubgroupedit");
@@ -699,7 +700,7 @@ void ConnectView::resized()  {
             mRecentsGroup->removeChildComponent(mRecentsContainer.get());
             mRecentsGroup->setVisible(false);
 
-            mConnectTab->addTab(TRANS("RECENTS"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mRecentsContainer.get(), false);
+            mConnectTab->addTab(TRANS("RECENTS"), TinCanTheme::surface, mRecentsContainer.get(), false);
             mConnectTab->moveTab(2, 0);
             mConnectTab->setCurrentTabIndex(tabsel + 1);
             updateLayout();
@@ -1223,9 +1224,9 @@ void ConnectView::connectWithInfo(const AooServerConnectionInfo & info, bool all
         return;
     }
     else {
-        mServerGroupEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+        mServerGroupEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
         mServerGroupEditor->repaint();
-        mPublicServerGroupEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+        mPublicServerGroupEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
         mPublicServerGroupEditor->repaint();
     }
 
@@ -1247,14 +1248,14 @@ void ConnectView::connectWithInfo(const AooServerConnectionInfo & info, bool all
         return;
     }
     else {
-        mServerUsernameEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+        mServerUsernameEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
         mServerUsernameEditor->repaint();
-        mPublicServerUsernameEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+        mPublicServerUsernameEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
         mPublicServerUsernameEditor->repaint();
     }
 
     //mServerGroupPasswordEditor->setColour(TextEditor::backgroundColourId, Colour(0xff880000));
-    mServerGroupPasswordEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+    mServerGroupPasswordEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
     mServerGroupPasswordEditor->repaint();
 
     if (currConnectionInfo.serverHost.isNotEmpty() && currConnectionInfo.serverPort != 0)
@@ -1271,10 +1272,10 @@ void ConnectView::connectWithInfo(const AooServerConnectionInfo & info, bool all
 
         });
 
-        mServerHostEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+        mServerHostEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
         mServerHostEditor->repaint();
 
-        mPublicServerHostEditor->setColour(TextEditor::backgroundColourId, Colour(0xff050505));
+        mPublicServerHostEditor->setColour(TextEditor::backgroundColourId, TinCanTheme::field);
         mPublicServerHostEditor->repaint();
     }
     else {

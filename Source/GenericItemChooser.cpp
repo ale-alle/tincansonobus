@@ -3,6 +3,7 @@
 
 
 #include "GenericItemChooser.h"
+#include "TinCanTheme.h"
 #include "SonoLookAndFeel.h"
 
 enum {
@@ -81,12 +82,12 @@ GenericItemChooser::GenericItemChooser(const Array<GenericItemChooserItem> & ite
     // give it a border
 
     table.setColour (ListBox::outlineColourId, Colour::fromFloatRGBA(0.0, 0.0, 0.0, 0.0));
-    table.setColour (ListBox::backgroundColourId, Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0f));
+    table.setColour (ListBox::backgroundColourId, TinCanTheme::surface);
     table.setColour (ListBox::textColourId, Colours::whitesmoke.withAlpha(0.8f));
     
     setColour (nameTextColourId, Colour::fromFloatRGBA(1.0f, 1.0f, 1.0f, 0.8f));
     setColour (currentNameTextColourId, Colour::fromFloatRGBA(0.4f, 0.8f, 1.0f, 0.9f));
-    setColour (selectedColourId, Colour (0xff3d70c8).withAlpha(0.5f));
+    setColour (selectedColourId, TinCanTheme::lineStrong);
     setColour (separatorColourId, Colour::fromFloatRGBA(1.0f, 1.0f, 1.0f, 0.5f));
     setColour (disabledColourId, Colour::fromFloatRGBA(0.7f, 0.7f, 0.7f, 0.7f));
 

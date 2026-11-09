@@ -384,6 +384,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanPracticeTools.h
         Source/TinCanTools.cpp
         Source/TinCanTools.h
+        Source/TinCanTheme.h
         Source/TinCanVideo.cpp
         Source/TinCanVideo.h
         Source/TinCanWorkspace.cpp

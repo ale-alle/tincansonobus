@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanTools.h"
+#include "TinCanTheme.h"
 #include "TinCanPracticeTools.h"
 #include "SonobusPluginProcessor.h"
 
@@ -174,7 +175,7 @@ int FretboardView::fretAt(float x) const
 
 void FretboardView::paint(Graphics & g)
 {
-    g.fillAll(Colour(0xff1c1c1c));
+    g.fillAll(TinCanTheme::surface);
     auto neck = neckArea();
     int n = (int) strings.size();
     if (n == 0) return;
@@ -444,7 +445,7 @@ void InstrumentPanel::applyCustomTuning()
 
 void InstrumentPanel::paint(Graphics & g)
 {
-    g.fillAll(Colour(0xff1c1c1c));
+    g.fillAll(TinCanTheme::surface);
 
     // legend: swatch + text for each kind of note
     struct Item { Colour colour; String text; };
@@ -634,7 +635,7 @@ public:
         addAndMakeVisible(openButton);
     }
 
-    void paint(Graphics & g) override { g.fillAll(Colour(0xff1c1c1c)); }
+    void paint(Graphics & g) override { g.fillAll(TinCanTheme::surface); }
 
     void resized() override
     {
@@ -651,17 +652,17 @@ private:
 
 ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
                          std::function<void()> openWorkspace, SummaryHooks summaryHooks, std::function<void()> onCloseFunc)
-    : DocumentWindow(TRANS("Teaching tools"), Colour(0xff1c1c1c), DocumentWindow::allButtons),
+    : DocumentWindow(TRANS("Teaching tools"), TinCanTheme::surface, DocumentWindow::allButtons),
       onClose(std::move(onCloseFunc))
 {
     tabs = new TabbedComponent(TabbedButtonBar::TabsAtTop);
     tabs->setTabBarDepth(28);
-    tabs->addTab(TRANS("Instrument"), Colour(0xff1c1c1c), new InstrumentPanel(processor, getDeviceManager), true);
-    tabs->addTab(TRANS("Tuner"), Colour(0xff1c1c1c), new TunerPanel(processor), true);
-    tabs->addTab(TRANS("Metronome"), Colour(0xff1c1c1c), new MetronomePanel(processor), true);
-    tabs->addTab(TRANS("Workspace"), Colour(0xff1c1c1c), new WorkspacePanel(std::move(openWorkspace)), true);
+    tabs->addTab(TRANS("Instrument"), TinCanTheme::surface, new InstrumentPanel(processor, getDeviceManager), true);
+    tabs->addTab(TRANS("Tuner"), TinCanTheme::surface, new TunerPanel(processor), true);
+    tabs->addTab(TRANS("Metronome"), TinCanTheme::surface, new MetronomePanel(processor), true);
+    tabs->addTab(TRANS("Workspace"), TinCanTheme::surface, new WorkspacePanel(std::move(openWorkspace)), true);
     summaries = new SummariesPanel(std::move(summaryHooks));
-    tabs->addTab(TRANS("Summaries"), Colour(0xff1c1c1c), summaries, true);
+    tabs->addTab(TRANS("Summaries"), TinCanTheme::surface, summaries, true);
 
     setUsingNativeTitleBar(true);
     setContentOwned(tabs, false);

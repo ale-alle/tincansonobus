@@ -2,6 +2,7 @@
 // Copyright (C) 2020 Jesse Chappell
 
 #include "ChannelGroupsView.h"
+#include "TinCanTheme.h"
 
 
 using namespace SonoAudio;
@@ -927,10 +928,10 @@ ChannelGroupsView::ChannelGroupsView(SonobusAudioProcessor& proc, bool peerMode,
     
     droppedTextColor = Colour(0xc0ee8888);
 
-    outlineColor = Colour::fromFloatRGBA(0.25, 0.25, 0.25, 1.0);
+    outlineColor = TinCanTheme::line;
 
     //bgColor = Colour::fromFloatRGBA(0.045f, 0.045f, 0.05f, 1.0f);
-    bgColor = Colour::fromFloatRGBA(0.08f, 0.045f, 0.08f, 1.0f);
+    bgColor = TinCanTheme::surface;
 
     mInGainSlider     = std::make_unique<Slider>(Slider::LinearHorizontal,  Slider::TextBoxAbove);
     mInGainSlider->setName("ingain");
@@ -964,7 +965,7 @@ ChannelGroupsView::ChannelGroupsView(SonobusAudioProcessor& proc, bool peerMode,
     };
 
     mMonDelayButton = std::make_unique<TextButton>(TRANS("Monitor Delay"));
-    mMonDelayButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.5));
+    mMonDelayButton->setColour(TextButton::buttonOnColourId, TinCanTheme::string.withAlpha(0.5f));
     mMonDelayButton->setTooltip(TRANS("Toggle monitor delay enabled on all input groups"));
     addChildComponent(mMonDelayButton.get());
     mMonDelayButton->onClick = [this]() {
@@ -1362,7 +1363,7 @@ ChannelGroupView * ChannelGroupsView::createChannelGroupView(bool first)
 
     pvf->linkButton->setColour(SonoTextButton::outlineColourId, Colours::transparentBlack);
     pvf->linkButton->setColour(DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.4, 0.35, 0.4, 0.7));
-    pvf->linkButton->setColour(DrawableButton::backgroundColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 0.6));
+    pvf->linkButton->setColour(DrawableButton::backgroundColourId, TinCanTheme::raised.withAlpha(0.6f));
     pvf->linkButton->setClickingTogglesState(false);
     pvf->linkButton->setTriggeredOnMouseDown(false);
     pvf->linkButton->setLookAndFeel(&pvf->smallLnf);
@@ -1407,7 +1408,7 @@ ChannelGroupView * ChannelGroupsView::createChannelGroupView(bool first)
     pvf->monoButton->setForegroundImageRatio(0.1f);
     pvf->monoButton->setColour(SonoTextButton::outlineColourId, Colours::transparentBlack);
     pvf->monoButton->setColour(DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.4, 0.35, 0.4, 0.7));
-    pvf->monoButton->setColour(DrawableButton::backgroundColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 0.6));
+    pvf->monoButton->setColour(DrawableButton::backgroundColourId, TinCanTheme::raised.withAlpha(0.6f));
     pvf->monoButton->setLookAndFeel(&pvf->smallLnf);
     //pvf->linkButton->addListener(this);
     //pvf->linkButton->addMouseListener(this, false);
@@ -1422,7 +1423,7 @@ ChannelGroupView * ChannelGroupsView::createChannelGroupView(bool first)
     pvf->destButton->setForegroundImageRatio(0.35f);
     //pvf->destButton->setColour(SonoTextButton::outlineColourId, Colour::fromFloatRGBA(0.4, 0.4, 0.4, 0.6));
     //pvf->destButton->setColour(DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.4, 0.35, 0.4, 0.7));
-    pvf->destButton->setColour(DrawableButton::backgroundColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 0.6));
+    pvf->destButton->setColour(DrawableButton::backgroundColourId, TinCanTheme::raised.withAlpha(0.6f));
     pvf->destButton->setLookAndFeel(&pvf->smallLnf);
     pvf->destButton->addListener(this);
     if (mPeerMode) {
@@ -1442,7 +1443,7 @@ ChannelGroupView * ChannelGroupsView::createChannelGroupView(bool first)
 #endif
 
     pvf->fxButton = std::make_unique<TextButton>(TRANS("FX"));
-    pvf->fxButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.5));
+    pvf->fxButton->setColour(TextButton::buttonOnColourId, TinCanTheme::string.withAlpha(0.5f));
     pvf->fxButton->addListener(this);
     pvf->fxButton->setLookAndFeel(&pvf->medLnf);
     if (!mPeerMode) {
@@ -1454,7 +1455,7 @@ ChannelGroupView * ChannelGroupsView::createChannelGroupView(bool first)
     }
 
     pvf->monfxButton = std::make_unique<TextButton>(TRANS("M.FX"));
-    pvf->monfxButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.5));
+    pvf->monfxButton->setColour(TextButton::buttonOnColourId, TinCanTheme::string.withAlpha(0.5f));
     pvf->monfxButton->addListener(this);
     pvf->monfxButton->setLookAndFeel(&pvf->medLnf);
     if (!mPeerMode) {
@@ -1646,7 +1647,7 @@ void ChannelGroupsView::rebuildChannelViews(bool notify)
             mMetChannelView->linkButton->setClickingTogglesState(true);
             mMetSendAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (processor.getValueTreeState(), SonobusAudioProcessor::paramSendMetAudio, *mMetChannelView->linkButton);
             mMetChannelView->linkButton->setForegroundImageRatio(1.0f);
-            mMetChannelView->linkButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.65));
+            mMetChannelView->linkButton->setColour(TextButton::buttonOnColourId, TinCanTheme::string.withAlpha(0.65f));
             mMetChannelView->linkButton->setColour(TextButton::buttonColourId, Colours::transparentBlack);
             mMetChannelView->linkButton->setTooltip(TRANS("Send Metronome to All"));
 
@@ -1724,7 +1725,7 @@ void ChannelGroupsView::rebuildChannelViews(bool notify)
             mFileSendAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (processor.getValueTreeState(), SonobusAudioProcessor::paramSendFileAudio, *mFileChannelView->linkButton);
             mFileChannelView->linkButton->setButtonStyle(DrawableButton::ButtonStyle::ImageOnButtonBackground);
             mFileChannelView->linkButton->setForegroundImageRatio(1.0f);
-            mFileChannelView->linkButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.65));
+            mFileChannelView->linkButton->setColour(TextButton::buttonOnColourId, TinCanTheme::string.withAlpha(0.65f));
             mFileChannelView->linkButton->setColour(TextButton::buttonColourId, Colours::transparentBlack);
             mFileChannelView->linkButton->setTooltip(TRANS("Send File Playback to All"));
 
@@ -1799,7 +1800,7 @@ void ChannelGroupsView::rebuildChannelViews(bool notify)
             mSoundboardSendAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (processor.getValueTreeState(), SonobusAudioProcessor::paramSendSoundboardAudio, *mSoundboardChannelView->linkButton);
             mSoundboardChannelView->linkButton->setButtonStyle(DrawableButton::ButtonStyle::ImageOnButtonBackground);
             mSoundboardChannelView->linkButton->setForegroundImageRatio(1.0f);
-            mSoundboardChannelView->linkButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.65));
+            mSoundboardChannelView->linkButton->setColour(TextButton::buttonOnColourId, TinCanTheme::string.withAlpha(0.65f));
             mSoundboardChannelView->linkButton->setColour(TextButton::buttonColourId, Colours::transparentBlack);
             mSoundboardChannelView->linkButton->setTooltip(TRANS("Send Soundboard to All"));
 

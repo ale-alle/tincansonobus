@@ -14,8 +14,9 @@
 <meta name="referrer" content="no-referrer">
 <title>CanDuet workspace</title>
 <style>
-  :root { --bg: #111317; --panel: #1c1f26; --panel2: #232833; --text: #eef0f4; --muted: #9aa3b2;
-          --accent: #f2a541; --blue: #47b0f8; --danger: #e5645a; --line: #3a404c; }
+  /* Colours match tincanstudios.ca night palette (Source/TinCanTheme.h) */
+  :root { --bg: #0a0f1e; --panel: #121a2e; --panel2: #1a2440; --text: #e8ecf6; --muted: #b4bed6;
+          --accent: #e5484d; --blue: #47b0f8; --danger: #e5645a; --line: #3a4a75; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
                font: 14px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
@@ -25,11 +26,11 @@
          padding: 7px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
   #middle { position: relative; flex: 1; min-height: 0; }
   #bar .sep { width: 1px; height: 28px; background: var(--line); margin: 0 4px; flex: none; }
-  button, select { font: inherit; color: var(--text); background: #2a2f39; border: 1px solid var(--line);
+  button, select { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
                    border-radius: 6px; padding: 4px 10px; min-height: 32px; flex: none; cursor: pointer; }
   button:hover { border-color: var(--muted); }
   button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button[aria-pressed="true"] { background: #3b4352; border-color: var(--accent); }
+  button[aria-pressed="true"] { background: #233052; border-color: var(--accent); }
   button:disabled { opacity: 0.45; cursor: default; }
   .swatch { width: 26px; min-height: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
   .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--accent); }
@@ -55,7 +56,7 @@
   .card { position: absolute; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
           box-shadow: 0 6px 20px rgba(0,0,0,.35); display: flex; flex-direction: column; overflow: hidden; }
   .card.active { border-color: var(--accent); }
-  .card .title { height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 10px; background: #2a2f39;
+  .card .title { height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 10px; background: var(--panel2);
                  cursor: grab; user-select: none; flex: none; }
   .card .title .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
   .card .title button { min-height: 24px; padding: 0 7px; font-size: 12px; background: transparent; border-color: transparent; }

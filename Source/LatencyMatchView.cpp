@@ -4,6 +4,7 @@
 
 
 #include "LatencyMatchView.h"
+#include "TinCanTheme.h"
 #include "GenericItemChooser.h"
 
 LatencyMatchView::LatencyMatchView(SonobusAudioProcessor& proc) :  sonoSliderLNF(12), processor(proc)
@@ -125,7 +126,7 @@ Slider * LatencyMatchView::createPeerLatSlider()
     auto * slider = new Slider(Slider::LinearBar,  Slider::TextBoxAbove);
     slider->setEnabled(false);
     slider->setLookAndFeel(&sonoSliderLNF);
-    slider->setColour(Slider::backgroundColourId, Colour(0xff050505));
+    slider->setColour(Slider::backgroundColourId, TinCanTheme::field);
 
     slider->setTextValueSuffix(" ms");
     slider->getProperties().set ("noFill", true);

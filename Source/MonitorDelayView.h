@@ -5,6 +5,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "TinCanTheme.h"
 
 #include "SonoLookAndFeel.h"
 #include "SonoDrawableButton.h"
@@ -36,7 +37,7 @@ public:
         timeSlider.addListener(this);
         //timeSlider.getProperties().set ("noFill", true);
         timeSlider.setTextBoxIsEditable(true);
-        timeSlider.setColour(Slider::trackColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.3));
+        timeSlider.setColour(Slider::trackColourId, TinCanTheme::string.withAlpha(0.35f));
 
         timeLabel.setText(TRANS("Delay Time"), dontSendNotification);
         timeLabel.setAccessible(false);

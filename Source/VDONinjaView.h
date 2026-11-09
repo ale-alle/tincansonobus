@@ -5,6 +5,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "TinCanTheme.h"
 
 #include "SonoLookAndFeel.h"
 #include "SonoDrawableButton.h"
@@ -104,7 +105,7 @@ public:
         };
 
         openLinkButton.setButtonText(TRANS("Join Video in Browser"));
-        openLinkButton.setColour(TextButton::buttonColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.6));
+        openLinkButton.setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
         //openLinkButtonsetColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.6, 0.4, 0.6, 0.6));
         openLinkButton.setColour(SonoTextButton::outlineColourId, Colour::fromFloatRGBA(0.5, 0.5, 0.5, 0.4));
         openLinkButton.setTooltip(TRANS("Open VDO.Ninja group URL in the default web browser"));

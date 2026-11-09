@@ -4,6 +4,7 @@
 
 
 #include "ChatView.h"
+#include "TinCanTheme.h"
 #include "GenericItemChooser.h"
 #include "SonoLookAndFeel.h"
 
@@ -138,7 +139,7 @@ ChatView::ChatView(SonobusAudioProcessor& proc, AooServerConnectionInfo & connec
     //mChatSendButton->setButtonText(TRANS("Send"));
     //mChatSendButton->onClick = [this]() { commitChatMessage(); };
 
-    mChatTabs->addTab(TRANS("ALL"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), 0);
+    mChatTabs->addTab(TRANS("ALL"), TinCanTheme::surface, 0);
     
     addAndMakeVisible(mChatTabs.get());
     addAndMakeVisible(mChatTextEditor.get());
@@ -207,7 +208,7 @@ ChatView::~ChatView()
 
 void ChatView::paint (Graphics& g)
 {
-    g.fillAll (Colour(0xff272727));
+    g.fillAll (TinCanTheme::surface);
 }
 
 void ChatView::resized()
@@ -748,7 +749,7 @@ void ChatView::setMesgUnreadForTab(const String & name, bool flag)
 void ChatView::appendPrivateChatTab(const String & name, bool setcurrent)
 {
     auto usecolor = getOrGenerateUserColor(name);
-    mChatTabs->addTab(name, Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mChatTabs->getNumTabs());
+    mChatTabs->addTab(name, TinCanTheme::surface, mChatTabs->getNumTabs());
     if (auto button = mChatTabs->getTabButton(mChatTabs->getNumTabs()-1)) {
         button->setColour(TabbedButtonBar::tabTextColourId, usecolor);
         button->setColour(TabbedButtonBar::frontTextColourId, usecolor);

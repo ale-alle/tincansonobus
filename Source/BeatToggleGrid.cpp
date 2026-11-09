@@ -3,6 +3,7 @@
 
 
 #include "BeatToggleGrid.h"
+#include "TinCanTheme.h"
 
 //#include "DebugLogC.h"
 
@@ -43,7 +44,7 @@ void BeatToggleGrid::setupStuff()
     
     //onColor = [[UIColor colorWithRed:0.2 green:0.3 blue:0.4 alpha:1.0 ] retain];
     //onColor = [[UIColor colorWithRed:0.247 green:0.368 blue:0.329 alpha:1.0 ] retain];
-    onColor = Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.9);
+    onColor = TinCanTheme::string.withAlpha(0.9f);
     
     activeColor = Colour::fromFloatRGBA(0.1, 0.7, 0.5, 1.0);
     

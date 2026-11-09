@@ -4,6 +4,7 @@
 
 
 #include "SampleEditView.h"
+#include "TinCanTheme.h"
 
 #include <utility>
 #include <iostream>
@@ -545,7 +546,7 @@ bool SampleEditView::keyPressed(const KeyPress& keyPress)
 
 void SampleEditView::paint(Graphics& g)
 {
-    g.fillAll(Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0));
+    g.fillAll(TinCanTheme::surface);
 }
 
 void SampleEditView::resized()

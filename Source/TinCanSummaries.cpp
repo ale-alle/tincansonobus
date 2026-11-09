@@ -2,10 +2,11 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanSummaries.h"
+#include "TinCanTheme.h"
 
 namespace TinCan {
 
-static const Colour kBackground(0xff1c1c1c);
+static const Colour kBackground(TinCanTheme::surface);
 static const Colour kText(0xffeeeeee);
 static const Colour kMuted(0xff9aa3b2);
 static const Colour kSelected(0xff2f4f6f);
@@ -107,7 +108,7 @@ SummariesPanel::SummariesPanel(SummaryHooks h)
 
     for (auto * lb : { &lessons, &highlights }) {
         lb->setColour(ListBox::backgroundColourId, Colour(0xff151515));
-        lb->setColour(ListBox::outlineColourId, Colour(0xff333333));
+        lb->setColour(ListBox::outlineColourId, TinCanTheme::line);
         lb->setOutlineThickness(1);
         addAndMakeVisible(lb);
     }

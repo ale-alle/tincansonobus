@@ -2,13 +2,14 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanPracticeTools.h"
+#include "TinCanTheme.h"
 #include "TinCanNotes.h"
 #include "SonobusPluginProcessor.h"
 
 namespace TinCan {
 
-static const Colour panelBackground(0xff1c1c1c);
-static const Colour accent(0xff47b0f8);
+static const Colour panelBackground(TinCanTheme::surface);
+static const Colour accent(TinCanTheme::stringLight);
 static const Colour accentBar(0xfff0a030);
 static const Colour inTune(0xff5ccf72);
 
@@ -51,7 +52,7 @@ void BeatIndicator::paint(Graphics & g)
         Colour on = (b == 0 && beatsPerBar > 1) || countIn ? accentBar : accent;
         // the current beat flashes and fades over the beat
         float glow = current ? (float) jlimit(0.25, 1.0, 1.0 - frac * 0.75) : 0.0f;
-        g.setColour(current ? on.withAlpha(glow) : Colour(0xff333333));
+        g.setColour(current ? on.withAlpha(glow) : TinCanTheme::line);
         g.fillEllipse(circle);
         g.setColour(Colour(0x55ffffff));
         g.drawEllipse(circle, 1.0f);
@@ -264,7 +265,7 @@ void TunerDisplay::paint(Graphics & g)
 
     // cents scale with a needle
     auto meter = r.removeFromTop(r.getHeight() * 0.55f).reduced(20.0f, 6.0f);
-    g.setColour(Colour(0xff2a2a2a));
+    g.setColour(TinCanTheme::raised);
     g.fillRoundedRectangle(meter, 6.0f);
     auto centreX = meter.getCentreX();
     g.setColour(inTune.withAlpha(0.25f));

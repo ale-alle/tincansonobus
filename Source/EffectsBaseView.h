@@ -5,6 +5,7 @@
 #pragma once
 
 #include "JuceHeader.h"
+#include "TinCanTheme.h"
 
 #include "SonobusPluginProcessor.h"
 #include "SonoLookAndFeel.h"
@@ -98,8 +99,8 @@ public:
         
         FlexBox headerBox;
         EffectsBaseView & parent;
-        Colour normalColor = { Colour(0xff2a2a2a) };
-        Colour enabledColor = { Colour::fromFloatRGBA(0.2f, 0.5f, 0.7f, 0.5f) };
+        Colour normalColor = { TinCanTheme::raised };
+        Colour enabledColor = { TinCanTheme::string.withAlpha(0.5f) };
         bool mouseIsOver = false;
     };
     

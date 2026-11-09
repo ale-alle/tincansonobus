@@ -4,6 +4,7 @@
 
 
 #include <sstream>
+#include "TinCanTheme.h"
 
 #include "SoundboardView.h"
 #include "SoundboardEditView.h"
@@ -144,7 +145,7 @@ void SoundboardView::createControlPanel()
     mHotkeyStateButton->setForegroundImageRatio(0.75f);
     mHotkeyStateButton->setClickingTogglesState(true);
     mHotkeyStateButton->setColour(DrawableButton::backgroundColourId, Colours::transparentBlack);
-    mHotkeyStateButton->setColour(DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 0.7));
+    mHotkeyStateButton->setColour(DrawableButton::backgroundOnColourId, TinCanTheme::raised);
     mHotkeyStateButton->setTitle(TRANS("Toggle hotkeys"));
     mHotkeyStateButton->setTooltip(TRANS("Toggles whether sound samples can be played using hotkeys."));
     mHotkeyStateButton->setToggleState(processor->isHotkeysMuted(), NotificationType::dontSendNotification);
@@ -160,7 +161,7 @@ void SoundboardView::createControlPanel()
     mNumericHotkeyStateButton->setForegroundImageRatio(0.75f);
     mNumericHotkeyStateButton->setClickingTogglesState(true);
     mNumericHotkeyStateButton->setColour(DrawableButton::backgroundColourId, Colours::transparentBlack);
-    mNumericHotkeyStateButton->setColour(DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.2, 0.2, 0.2, 0.7));
+    mNumericHotkeyStateButton->setColour(DrawableButton::backgroundOnColourId, TinCanTheme::raised);
     mNumericHotkeyStateButton->setTitle(TRANS("Toggle numeric hotkeys"));
     mNumericHotkeyStateButton->setTooltip(TRANS("Toggles whether sound samples can be played using default numeric hotkeys."));
     mNumericHotkeyStateButton->setToggleState(!processor->isDefaultNumericHotkeyAllowed(), NotificationType::dontSendNotification);
@@ -215,7 +216,7 @@ void SoundboardView::createControlPanel()
     std::unique_ptr<Drawable> filesendimg(Drawable::createFromImageData(BinaryData::send_group_small_svg, BinaryData::send_group_small_svgSize));
     mSendAudioButton->setImages(filesendimg.get(), nullptr, nullptr, nullptr, nullptr);
     mSendAudioButton->setClickingTogglesState(true);
-    mSendAudioButton->setColour(DrawableButton::backgroundOnColourId, Colour::fromFloatRGBA(0.2, 0.5, 0.7, 0.65));
+    mSendAudioButton->setColour(DrawableButton::backgroundOnColourId, TinCanTheme::string.withAlpha(0.65f));
     mSendAudioButton->setColour(TextButton::buttonColourId, Colours::transparentBlack);
     auto sendallstr = TRANS("Send Soundboard Playback to All");
     mSendAudioButton->setTooltip(sendallstr);
@@ -904,7 +905,7 @@ void SoundboardView::applyOptionsToAll(SoundSample & fromsample)
 
 void SoundboardView::paint(Graphics& g)
 {
-    g.fillAll(Colour(0xff272727));
+    g.fillAll(TinCanTheme::surface);
 }
 
 void SoundboardView::componentVisibilityChanged (Component& component)

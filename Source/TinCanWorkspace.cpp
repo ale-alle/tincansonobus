@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanWorkspace.h"
+#include "TinCanTheme.h"
 #include "TinCanVideo.h"
 #include "BinaryData.h"
 
@@ -55,7 +56,7 @@ private:
 }
 
 WorkspaceWindow::WorkspaceWindow(const String & displayName)
-    : DocumentWindow(TRANS("Lesson workspace"), Colour(0xff111317), DocumentWindow::allButtons)
+    : DocumentWindow(TRANS("Lesson workspace"), TinCanTheme::night, DocumentWindow::allButtons)
 {
     setUsingNativeTitleBar(true);
     setResizable(true, false);
@@ -81,7 +82,7 @@ WorkspaceWindow::WorkspaceWindow(const String & displayName)
 #else
 
 WorkspaceWindow::WorkspaceWindow(const String &)
-    : DocumentWindow(TRANS("Lesson workspace"), Colour(0xff111317), DocumentWindow::allButtons)
+    : DocumentWindow(TRANS("Lesson workspace"), TinCanTheme::night, DocumentWindow::allButtons)
 {
     setUsingNativeTitleBar(true);
     auto * label = new Label({}, TRANS("The workspace isn't available in this build."));

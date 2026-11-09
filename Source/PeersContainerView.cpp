@@ -2,6 +2,7 @@
 // Copyright (C) 2020 Jesse Chappell
 
 #include "PeersContainerView.h"
+#include "TinCanTheme.h"
 #include "JitterBufferMeter.h"
 #include <set>
 #include <cmath> // For std::sqrt, std::ceil
@@ -10,7 +11,7 @@ using namespace SonoAudio;
 
 PeerViewInfo::PeerViewInfo() : smallLnf(12), medLnf(14), sonoSliderLNF(12), panSliderLNF(12)
 {
-    bgColor = Colour::fromFloatRGBA(0.112f, 0.112f, 0.112f, 1.0f);
+    bgColor = TinCanTheme::surface;
     borderColor = Colour::fromFloatRGBA(0.5f, 0.5f, 0.5f, 0.3f);
 
     sonoSliderLNF.textJustification = Justification::centredLeft;
@@ -170,7 +171,7 @@ void PeerViewInfo::resized()
 
 PendingPeerViewInfo::PendingPeerViewInfo()
 {
-    bgColor = Colour::fromFloatRGBA(0.112f, 0.112f, 0.112f, 1.0f);
+    bgColor = TinCanTheme::surface;
     borderColor = Colour::fromFloatRGBA(0.5f, 0.5f, 0.5f, 0.3f);
 
     //Random rcol;
@@ -215,8 +216,8 @@ PeersContainerView::PeersContainerView(SonobusAudioProcessor& proc)
     
     droppedTextColor = Colour(0xc0ee8888);
 
-    outlineColor = Colour::fromFloatRGBA(0.25, 0.25, 0.25, 1.0);
-    bgColor = Colours::black;
+    outlineColor = TinCanTheme::line;
+    bgColor = TinCanTheme::night;
 
     peerModeFull = processor.getPeerDisplayMode() == SonobusAudioProcessor::PeerDisplayModeFull;
 
@@ -507,7 +508,7 @@ PeerViewInfo * PeersContainerView::createPeerViewInfo()
     pvf->bufferTimeSlider->setChangeNotificationOnlyOnRelease(true);
     pvf->bufferTimeSlider->setScrollWheelEnabled(false);
     pvf->bufferTimeSlider->setPopupDisplayEnabled(true, false, this);
-    pvf->bufferTimeSlider->setColour(Slider::trackColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.3));
+    pvf->bufferTimeSlider->setColour(Slider::trackColourId, TinCanTheme::string.withAlpha(0.35f));
 
     pvf->bufferTimeSlider->addListener(this);
 
@@ -707,7 +708,7 @@ PeerViewInfo * PeersContainerView::createPeerViewInfo()
     pvf->recvOptionsContainer = std::make_unique<Component>();
     pvf->recvOptionsContainer->setFocusContainerType(FocusContainerType::focusContainer);
 
-    Colour statsbgcol = Colour::fromFloatRGBA(0.07, 0.07, 0.07, 1.0); // 0.08
+    Colour statsbgcol = TinCanTheme::night;
     Colour statsbordcol = Colour::fromFloatRGBA(0.5, 0.5, 0.5, 0.0); // 0.5 alpha 0.25
     pvf->sendStatsBg = std::make_unique<DrawableRectangle>();
     pvf->sendStatsBg->setCornerSize(Point<float>(6,6));

@@ -120,8 +120,8 @@
         viewer.alt = c.name;
         content.append(viewer);
       } else {
-        content.style.background = "#2a2f39";
-        content.innerHTML = '<p style="color:#9aa3b2;padding:12px;margin:0">This file is on the other computer.</p>';
+        content.style.background = "#1a2440";
+        content.innerHTML = '<p style="color:#b4bed6;padding:12px;margin:0">This file is on the other computer.</p>';
       }
     }
     const canvas = document.createElement("canvas");

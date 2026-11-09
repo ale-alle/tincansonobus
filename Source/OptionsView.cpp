@@ -2,6 +2,7 @@
 // Copyright (C) 2021 Jesse Chappell
 
 #include "OptionsView.h"
+#include "TinCanTheme.h"
 
 #if JUCE_ANDROID
 #include "juce_core/native/juce_BasicNativeHeaders.h"
@@ -82,7 +83,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
 : Component(), getAudioDeviceManager(getaudiodevicemanager), processor(proc), smallLNF(14), sonoSliderLNF(13)
 {
     setColour (nameTextColourId, Colour::fromFloatRGBA(1.0f, 1.0f, 1.0f, 0.9f));
-    setColour (selectedColourId, Colour::fromFloatRGBA(0.0f, 0.4f, 0.8f, 0.5f));
+    setColour (selectedColourId, TinCanTheme::lineStrong);
     setColour (separatorColourId, Colour::fromFloatRGBA(0.3f, 0.3f, 0.3f, 0.3f));
 
     sonoSliderLNF.textJustification = Justification::centredRight;
@@ -107,7 +108,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
     mBufferTimeSlider->setDoubleClickReturnValue(true, 15.0);
     mBufferTimeSlider->setTextBoxIsEditable(true);
     mBufferTimeSlider->setScrollWheelEnabled(false);
-    mBufferTimeSlider->setColour(Slider::trackColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.3));
+    mBufferTimeSlider->setColour(Slider::trackColourId, TinCanTheme::string.withAlpha(0.35f));
     mBufferTimeSlider->setWantsKeyboardFocus(true);
 
     mBufferTimeSlider->setTooltip(TRANS("This controls controls the default jitter buffer size to start with. When using the Auto modes, it is recommended to keep the value at the minimum so it starts from the lowest possible value. Generally you will only want to set this higher if you are using a Manual mode default which is not recommended."));
@@ -326,7 +327,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
     mOptionsAutoDropThreshSlider->setDoubleClickReturnValue(true, 2.0);
     mOptionsAutoDropThreshSlider->setTextBoxIsEditable(false);
     mOptionsAutoDropThreshSlider->setScrollWheelEnabled(false);
-    mOptionsAutoDropThreshSlider->setColour(Slider::trackColourId, Colour::fromFloatRGBA(0.1, 0.4, 0.6, 0.3));
+    mOptionsAutoDropThreshSlider->setColour(Slider::trackColourId, TinCanTheme::string.withAlpha(0.35f));
     mOptionsAutoDropThreshSlider->setWantsKeyboardFocus(true);
 
     mOptionsAutoDropThreshSlider->onValueChange = [this]() {
@@ -494,7 +495,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
         }
 
         if (firsttime) {
-            mSettingsTab->addTab(TRANS("AUDIO"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mAudioOptionsViewport.get(), false);
+            mSettingsTab->addTab(TRANS("AUDIO"), TinCanTheme::surface, mAudioOptionsViewport.get(), false);
         }
 
     }
@@ -502,13 +503,13 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
     mOtherOptionsViewport = std::make_unique<Viewport>();
     mOtherOptionsViewport->setViewedComponent(mOptionsComponent.get(), false);
 
-    mSettingsTab->addTab(TRANS("OPTIONS"),Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mOtherOptionsViewport.get(), false);
-   // mSettingsTab->addTab(TRANS("HELP"), Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mHelpComponent.get(), false);
+    mSettingsTab->addTab(TRANS("OPTIONS"),TinCanTheme::surface, mOtherOptionsViewport.get(), false);
+   // mSettingsTab->addTab(TRANS("HELP"), TinCanTheme::surface, mHelpComponent.get(), false);
 
     mRecordOptionsViewport = std::make_unique<Viewport>();
     mRecordOptionsViewport->setViewedComponent(mRecOptionsComponent.get(), false);
 
-    mSettingsTab->addTab(TRANS("RECORDING"),Colour::fromFloatRGBA(0.1, 0.1, 0.1, 1.0), mRecordOptionsViewport.get(), false);
+    mSettingsTab->addTab(TRANS("RECORDING"),TinCanTheme::surface, mRecordOptionsViewport.get(), false);
 
     setFocusContainerType(FocusContainerType::keyboardFocusContainer);
 
