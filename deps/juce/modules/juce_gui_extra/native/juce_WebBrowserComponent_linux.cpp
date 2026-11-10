@@ -992,6 +992,9 @@ void WebBrowserComponent::goForward()
     browser->goForward();
 }
 
+void WebBrowserComponent::postWebMessage (const String&) {}  // Tin Can patch (WebView2 only)
+void WebBrowserComponent::webMessageReceived (const String&, const String&) {}  // Tin Can patch
+
 void WebBrowserComponent::refresh()
 {
     browser->refresh();

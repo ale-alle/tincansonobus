@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanWorkspace.h"
+#include "TinCanPaths.h"
 #include "TinCanTheme.h"
 #include "TinCanVideo.h"
 #include "BinaryData.h"
@@ -16,7 +17,7 @@ String getWorkspacePageURL(const String & displayName)
         index = File(dev).getChildFile("index.html");
     }
     else {
-        auto folder = File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("CanDuet").getChildFile("workspace");
+        auto folder = TinCan::getDataFolder().getChildFile("workspace");
         folder.createDirectory();
         const struct { const char * name; const char * data; int size; } files[] = {
             { "index.html", BinaryData::index_html, BinaryData::index_htmlSize },

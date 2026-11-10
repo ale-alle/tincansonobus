@@ -35,7 +35,8 @@ enum {
 };
 
 enum {
-    FillRatioUpdateTimerId = 0
+    FillRatioUpdateTimerId = 0,
+    VideoTilesTimerId = 1
 };
 
 void PeerViewInfo::paint(Graphics& g) 
@@ -328,6 +329,13 @@ void PeersContainerView::resized()
         bounds.removeFromTop(4);
     }
 
+    // Tin Can video tiles: the page covers the whole people area, even before anyone joins
+    mGridBounds = bounds;
+    if (mVideoTiles) {
+        mVideoTiles->setBounds(mGridBounds);
+        mVideoTiles->toFront(false);
+    }
+
     // --- Begin Grid Layout ---
     int numPeers = mPeerViews.size();
     if (numPeers == 0)
@@ -360,6 +368,9 @@ void PeersContainerView::resized()
     // Resize each PeerViewInfo (optional, if they need to layout their children)
     for (int i = 0; i < numPeers; ++i)
         mPeerViews.getUnchecked(i)->resized();
+
+    // a flipped tile's controls live in the overlay; the grid just moved them, so put them back
+    positionFlipOverlay();
 
     // Dismiss any callouts as before (unchanged)
     Component* dw = nullptr;
@@ -847,6 +858,9 @@ void PeersContainerView::setPeerDisplayMode(SonobusAudioProcessor::PeerDisplayMo
 void PeersContainerView::rebuildPeerViews()
 {
     int numpeers = processor.getNumberRemotePeers();
+
+    // views get reused for other people below, so hand any flipped one back first
+    if (mFlipOverlay) setFlipped({});
     
     showSendOptions(0, false);
     showRecvOptions(0, false);
@@ -1966,6 +1980,11 @@ String PeersContainerView::generateLatencyMessage(const SonobusAudioProcessor::L
 
 void PeersContainerView::timerCallback(int timerId)
 {
+    if (timerId == VideoTilesTimerId) {
+        sendTilesState();
+        positionFlipOverlay();
+        return;
+    }
     if (timerId == FillRatioUpdateTimerId) {
         for (int di=0; di < mPeerViews.size(); ++di) {
             PeerViewInfo * pvf = mPeerViews.getUnchecked(di);
@@ -2457,4 +2476,242 @@ void PeersContainerView::sliderValueChanged (Slider* slider)
        }
    }
 
+}
+
+
+// ==================== Tin Can video tiles (prototype) ====================
+
+// A tile "flipped" to its audio side: this person's full controls (the same PeerViewInfo the grid
+// uses) in a borderless child window lying exactly over their video tile. The web view is a native
+// window of its own, so nothing the app draws inside the main window can sit on top of it; a child
+// window created after it can.
+class PeersContainerView::FlipOverlay : public Component
+{
+public:
+    FlipOverlay(PeerViewInfo * view_, std::function<void()> onBack)
+        : view(view_)
+    {
+        setOpaque(true);
+        backButton.setButtonText(TRANS("Back to video"));
+        backButton.onClick = [onBack]() { if (onBack) onBack(); };
+        addAndMakeVisible(backButton);
+        if (view) addAndMakeVisible(view.getComponent());
+    }
+
+    // hand the controls back to the grid
+    void release(Component & grid)
+    {
+        if (view) grid.addAndMakeVisible(view.getComponent());
+        view = nullptr;
+    }
+
+    void paint(Graphics & g) override
+    {
+        g.fillAll(TinCanTheme::surface);
+        g.setColour(TinCanTheme::lineStrong);
+        g.drawRect(getLocalBounds(), 1);
+    }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced(4);
+        backButton.setBounds(r.removeFromBottom(30).removeFromRight(140));
+        r.removeFromBottom(4);
+        if (view) {
+            view->setBounds(r);
+            view->resized();
+        }
+    }
+
+private:
+    Component::SafePointer<PeerViewInfo> view;
+    TextButton backButton;
+};
+
+PeersContainerView::~PeersContainerView()
+{
+    closeVideoTiles();
+}
+
+void PeersContainerView::showVideoTiles(std::unique_ptr<TinCan::VideoTilesView> view)
+{
+    closeVideoTiles();
+    if (!view) return;
+
+    mVideoTiles = std::move(view);
+    mVideoTiles->onMessage = [this](const var & message) { handleTilesMessage(message); };
+    addAndMakeVisible(mVideoTiles.get());
+    resized();
+    startTimer(VideoTilesTimerId, 100);
+}
+
+void PeersContainerView::closeVideoTiles()
+{
+    stopTimer(VideoTilesTimerId);
+    setFlipped({});
+    mTileRects.clear();
+    mVideoTiles.reset();
+}
+
+int PeersContainerView::findPeerIndexByName(const String & name) const
+{
+    if (name.isEmpty()) return -1;
+    for (int i = 0; i < processor.getNumberRemotePeers(); ++i) {
+        if (processor.getRemotePeerUserName(i) == name) return i;
+    }
+    return -1;
+}
+
+int PeersContainerView::findViewIndexForPeer(int peerIndex) const
+{
+    for (int di = 0; di < mPeerViews.size() && di < (int) mPeerUpdateOrdering.size(); ++di) {
+        if (mPeerUpdateOrdering[di] == peerIndex) return di;
+    }
+    return -1;
+}
+
+void PeersContainerView::sendTilesState()
+{
+    if (!mVideoTiles) return;
+
+    Array<var> peers;
+    for (int i = 0; i < processor.getNumberRemotePeers(); ++i) {
+        auto name = processor.getRemotePeerUserName(i);
+        if (name.isEmpty()) continue;
+
+        int start = 0, count = 0;
+        bool stereo = processor.getRemotePeerChannelGroupStartAndCount(i, 0, start, count) && count == 2;
+        float pan = processor.getRemotePeerChannelPan(i, 0, 0);
+        if (stereo) pan = 0.5f * (pan + processor.getRemotePeerChannelPan(i, 0, 1));
+
+        float rms = 0.0f;
+        if (auto * meter = processor.getRemotePeerRecvMeterSource(i)) {
+            for (int ch = 0; ch < meter->getNumChannels(); ++ch) rms = jmax(rms, meter->getRMSLevel(ch));
+        }
+        float level = jlimit(0.0f, 1.0f, (Decibels::gainToDecibels(rms, -60.0f) + 60.0f) / 60.0f);
+
+        DynamicObject::Ptr p = new DynamicObject();
+        p->setProperty("id", name);
+        p->setProperty("gain", processor.getRemotePeerLevelGain(i));
+        p->setProperty("pan", pan);
+        p->setProperty("stereo", stereo);
+        p->setProperty("muted", !processor.getRemotePeerRecvAllow(i));
+        p->setProperty("connected", processor.getRemotePeerConnected(i));
+        p->setProperty("level", std::round(level * 100.0f) / 100.0f);
+        peers.add(var(p.get()));
+    }
+
+    DynamicObject::Ptr msg = new DynamicObject();
+    msg->setProperty("t", "state");
+    msg->setProperty("peers", peers);
+    msg->setProperty("flipped", mFlippedName);
+    mVideoTiles->send(var(msg.get()));
+}
+
+void PeersContainerView::handleTilesMessage(const var & message)
+{
+    const auto type = message.getProperty("t", var()).toString();
+    const auto name = message.getProperty("id", var()).toString();
+
+    if (type == "ready") {
+        sendTilesState();
+    }
+    else if (type == "gain" || type == "pan") {
+        int i = findPeerIndexByName(name);
+        auto v = message.getProperty("v", var());
+        if (i < 0 || !(v.isDouble() || v.isInt())) return;
+
+        if (type == "gain") {
+            processor.setRemotePeerLevelGain(i, jlimit(0.0f, 2.0f, (float) v));
+        }
+        else {
+            float centre = jlimit(-1.0f, 1.0f, (float) v);
+            int start = 0, count = 0;
+            if (processor.getRemotePeerChannelGroupStartAndCount(i, 0, start, count) && count == 2) {
+                // stereo: move both sides together and keep their spread
+                float p1 = processor.getRemotePeerChannelPan(i, 0, 0), p2 = processor.getRemotePeerChannelPan(i, 0, 1);
+                float half = 0.5f * (p2 - p1);
+                processor.setRemotePeerChannelPan(i, 0, 0, jlimit(-1.0f, 1.0f, centre - half));
+                processor.setRemotePeerChannelPan(i, 0, 1, jlimit(-1.0f, 1.0f, centre + half));
+            }
+            else {
+                processor.setRemotePeerChannelPan(i, 0, 0, centre);
+            }
+        }
+    }
+    else if (type == "flip") {
+        setFlipped(name == mFlippedName ? String() : name);
+    }
+    else if (type == "rects") {
+        mTileRects.clear();
+        if (auto * obj = message.getProperty("rects", var()).getDynamicObject()) {
+            for (auto & prop : obj->getProperties()) {
+                auto * a = prop.value.getArray();
+                if (a == nullptr || a->size() != 4) continue;
+                mTileRects[prop.name.toString()] = { (float) (*a)[0], (float) (*a)[1], (float) (*a)[2], (float) (*a)[3] };
+            }
+        }
+        positionFlipOverlay();
+    }
+}
+
+void PeersContainerView::setFlipped(const String & name)
+{
+    if (mFlipOverlay) {
+        mFlipOverlay->release(*this);
+        mFlipOverlay.reset();
+        mFlippedName.clear();
+        resized();
+    }
+
+    if (name.isEmpty() || !mVideoTiles || getPeer() == nullptr) {
+        sendTilesState();
+        return;
+    }
+
+    int vi = findViewIndexForPeer(findPeerIndexByName(name));
+    if (vi < 0) {
+        sendTilesState();
+        return;
+    }
+
+    updatePeerViews();  // the sliders may have moved on the page since the grid last looked
+
+    SafePointer<PeersContainerView> safeThis(this);
+    mFlipOverlay = std::make_unique<FlipOverlay>(mPeerViews.getUnchecked(vi), [safeThis]() {
+        // deleting the overlay from inside its own button click isn't safe; do it afterwards
+        MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->setFlipped({}); });
+    });
+    mFlippedName = name;
+
+    // a child of the main window's native window, created after the web view so it sits above it
+    mFlipOverlay->addToDesktop(0, getTopLevelComponent()->getPeer()->getNativeHandle());
+    positionFlipOverlay();
+    mFlipOverlay->setVisible(true);
+    mFlipOverlay->toFront(true);
+    sendTilesState();
+}
+
+void PeersContainerView::positionFlipOverlay()
+{
+    if (!mFlipOverlay || !mVideoTiles) return;
+
+    auto it = mTileRects.find(mFlippedName);
+    if (it == mTileRects.end()) {
+        mFlipOverlay->setVisible(false);
+        return;
+    }
+
+    auto page = mVideoTiles->getLocalBounds().toFloat();
+    auto f = it->second;
+    juce::Rectangle<int> tile = juce::Rectangle<float>(page.getWidth() * f.getX(), page.getHeight() * f.getY(),
+                                                       page.getWidth() * f.getWidth(), page.getHeight() * f.getHeight())
+                                    .getSmallestIntegerContainer();
+
+    // child windows are placed in the main window's client coordinates
+    auto * top = getTopLevelComponent();
+    auto bounds = top->getLocalArea(mVideoTiles.get(), tile);
+    if (mFlipOverlay->getBounds() != bounds) mFlipOverlay->setBounds(bounds);
+    mFlipOverlay->resized();
+    if (!mFlipOverlay->isVisible()) mFlipOverlay->setVisible(true);
 }

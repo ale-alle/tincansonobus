@@ -4,6 +4,7 @@
 
 
 #include "SonobusPluginProcessor.h"
+#include "TinCanPaths.h"
 #include "TinCanTheme.h"
 #include "SonobusPluginEditor.h"
 
@@ -2731,9 +2732,20 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
         // video runs beside the audio room; it never holds up or changes the audio join
         safeThis->closeLessonVideo();
         if (result.video.isValid() && TinCan::isVideoBuild()) {
-            safeThis->mVideoWindow = std::make_unique<TinCan::VideoWindow>(result.title, result.video, info.userName, [safeThis]() {
-                if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
-            });
+            // prototype: video tiles in the main window; TINCAN_VIDEO_WINDOW=1 keeps the separate window.
+            // Without WebView2 the window explains what's missing.
+            std::unique_ptr<TinCan::VideoTilesView> tiles;
+            if (SystemStats::getEnvironmentVariable("TINCAN_VIDEO_WINDOW", {}) != "1")
+                tiles = TinCan::VideoTilesView::create(result.video, info.userName);
+
+            if (tiles) {
+                safeThis->mPeerContainer->showVideoTiles(std::move(tiles));
+            }
+            else {
+                safeThis->mVideoWindow = std::make_unique<TinCan::VideoWindow>(result.title, result.video, info.userName, [safeThis]() {
+                    if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
+                });
+            }
         }
     });
 }
@@ -2937,8 +2949,7 @@ void logRecording(const String & text)
     static const String runTag = String::toHexString(Random::getSystemRandom().nextInt());  // tells two copies apart
     static CriticalSection lock;
     const ScopedLock sl(lock);
-    auto file = File::getSpecialLocation(File::userApplicationDataDirectory)
-                    .getChildFile("CanDuet").getChildFile("connection-log.txt");
+    auto file = TinCan::getDataFolder().getChildFile("connection-log.txt");
     file.getParentDirectory().createDirectory();
     if (file.getSize() > 256 * 1024) file.deleteFile();
     file.appendText(Time::getCurrentTime().toISO8601(true) + " recording[" + runTag + "] " + text + "\n");
@@ -3322,6 +3333,7 @@ void SonobusAudioProcessorEditor::showWorkspace()
 void SonobusAudioProcessorEditor::closeLessonVideo()
 {
     mVideoWindow.reset();
+    if (mPeerContainer) mPeerContainer->closeVideoTiles();
 }
 
 void SonobusAudioProcessorEditor::handleURL(const String & urlstr)

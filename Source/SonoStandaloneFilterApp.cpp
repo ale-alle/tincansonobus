@@ -32,6 +32,7 @@
 
 
 #include "JuceHeader.h"
+#include "TinCanPaths.h"
 
 #include "juce_core/system/juce_TargetPlatform.h"
 #include "juce_audio_plugin_client/detail/juce_CheckSettingMacros.h"
@@ -81,7 +82,7 @@ public:
 
         PropertiesFile::Options options;
 
-        options.applicationName     = getApplicationName();
+        options.applicationName     = TinCan::getDataFolderName();
         options.filenameSuffix      = ".settings";
         options.osxLibrarySubFolder = "Application Support/CanDuet";
        #if JUCE_LINUX

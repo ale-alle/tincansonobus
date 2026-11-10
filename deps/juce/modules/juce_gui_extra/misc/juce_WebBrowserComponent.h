@@ -218,6 +218,12 @@ public:
     /** Refreshes the browser. */
     void refresh();
 
+    /** Tin Can patch: sends a text message to the page, which receives it as a "message" event on
+        window.chrome.webview (event.data is the string). WebView2 only; does nothing on other
+        backends or before the page has loaded.
+    */
+    void postWebMessage (const String& message);
+
     /** Clear cookies that the OS has stored for the WebComponents of this application */
     static void clearCookies();
 
@@ -250,6 +256,12 @@ public:
         the window to be closed.
     */
     virtual void windowCloseRequest();
+
+    /** Tin Can patch: called on the message thread when the page calls
+        window.chrome.webview.postMessage() with a string. sourceURL is the address of the page that
+        sent it, so check it before trusting the message. WebView2 only.
+    */
+    virtual void webMessageReceived (const String& sourceURL, const String& message);
 
     /** This callback occurs when the browser attempts to load a URL in a new window.
         This won't actually load the window but gives you a chance to either launch a

@@ -1,0 +1,321 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPLv3-or-later WITH Appstore-exception
+     Copyright (C) 2026 Tin Can Studios
+
+     CanDuet video tiles (prototype, branch t-061-video-tiles). Fills the people area of the main
+     window: one tile per person with their video, name, and on hover a volume slider (right side),
+     a pan slider (top) and a button that flips the tile to that person's full audio options.
+     The app opens  <this page>#url=<wss://…>&token=<LiveKit JWT>&name=<display name>
+     and talks to the page through WebView2 messages (see Source/TinCanVideoTiles.h).
+     #demo=1 shows made-up people without the app or a video server, for design checks.
+     Video only: the microphone is never requested. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>CanDuet video tiles</title>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.1/dist/livekit-client.umd.js"
+        integrity="sha384-ejH14wPQkwwyImo2LYdigxCruyGOymTSDatUhlPFHPulPcrMglpJOjRVTMYqZYqQ"
+        crossorigin="anonymous"></script>
+<style>
+  /* Colours match tincanstudios.ca night palette (Source/TinCanTheme.h) */
+  :root { --bg: #0a0f1e; --panel: #121a2e; --raised: #1a2440; --line: #233052; --line-strong: #3a4a75;
+          --text: #e8ecf6; --muted: #b4bed6; --accent: #e5484d; --accent-light: #ff6b70; --accent-strong: #d7263d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 13px/1.35 "Segoe UI", system-ui, sans-serif; overflow: hidden; user-select: none; }
+  #grid { position: absolute; inset: 0; display: grid; gap: 8px; padding: 0; }
+  .tile { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 10px;
+          background: var(--panel); border: 1px solid var(--line); outline: none; }
+  .tile.speaking { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(229, 72, 77, .55); }
+  .tile:focus-visible { border-color: var(--accent-light); }
+  .tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+  .tile video[hidden] { display: none; }
+  .avatar { position: absolute; inset: 0; display: grid; place-items: center; }
+  .avatar span { width: 30%; max-width: 120px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+                 background: var(--raised); border: 2px solid var(--line-strong); color: var(--muted);
+                 font-size: clamp(18px, 5vw, 44px); font-weight: 600; }
+  .label { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 120px); display: flex; gap: 6px;
+           align-items: center; padding: 3px 8px; border-radius: 6px; background: rgba(10, 15, 30, .72);
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .label .muted { color: var(--accent-light); font-weight: 600; }
+  .label .muted[hidden] { display: none; }
+  .note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--muted);
+          text-align: center; padding: 8px; pointer-events: none; }
+
+  /* controls: hidden until the pointer is over the tile or a control has keyboard focus */
+  .ctl { opacity: 0; transition: opacity .15s; }
+  .tile:hover .ctl, .tile:focus-within .ctl, .tile.dragging .ctl { opacity: 1; }
+  .pan { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: min(60%, 320px);
+         display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+         background: rgba(10, 15, 30, .78); }
+  .pan small { color: var(--muted); width: 10px; text-align: center; }
+  .vol { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); height: min(62%, 260px);
+         display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border-radius: 999px;
+         background: rgba(10, 15, 30, .78); }
+  .vol output { font-size: 11px; color: var(--muted); min-width: 40px; text-align: center; }
+  input[type=range] { accent-color: var(--accent); margin: 0; }
+  .pan input { flex: 1; min-width: 60px; }
+  .vol input { writing-mode: vertical-lr; direction: rtl; flex: 1; width: 22px; min-height: 60px; }
+  .buttons { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+  .buttons button { font: inherit; color: var(--text); background: rgba(26, 36, 64, .9); border: 1px solid var(--line-strong);
+                    border-radius: 6px; min-width: 34px; height: 30px; padding: 0 8px; cursor: pointer; }
+  .buttons button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; }
+  .tile.flipped video, .tile.flipped .avatar { filter: blur(6px) brightness(.4); }
+
+  /* own camera, small, bottom right corner of the whole area */
+  #self { position: absolute; right: 12px; bottom: 48px; width: min(22%, 240px); aspect-ratio: 16 / 9; z-index: 5;
+          border-radius: 8px; overflow: hidden; border: 2px solid var(--line-strong); background: #000; }
+  #self[hidden] { display: none; }
+  #self video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #self button { position: absolute; left: 6px; bottom: 6px; }
+  #status { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 6; padding: 6px 12px;
+            border-radius: 8px; background: var(--raised); border: 1px solid var(--line-strong); color: var(--muted); }
+  #status[hidden] { display: none; }
+  #empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 15px; }
+  #empty[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main id="grid" aria-label="People in this lesson"></main>
+<div id="empty">Waiting for the other person to join…</div>
+<div id="self" class="ctl-host" hidden>
+  <video autoplay playsinline muted aria-label="Your camera"></video>
+</div>
+<div id="status" role="status" aria-live="polite" hidden></div>
+<script>
+"use strict";
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, "", location.pathname + location.search);
+  const demo = params.get("demo") === "1";
+  const host = window.chrome && window.chrome.webview;   // the CanDuet app
+  const state = window.canduetTiles = { phase: "starting", peers: [], videoNames: [], flipped: "", sent: 0 };
+
+  function setStatus(text) { $("status").textContent = text || ""; $("status").hidden = !text; }
+  function send(msg) {
+    if (!host) return;
+    host.postMessage(JSON.stringify(msg));
+    state.sent++;
+  }
+
+  // ---- volume: same curve as the app's level sliders (gain 0..2, skew 0.5) ----
+  const posToGain = (p) => 2 * p * p;
+  const gainToPos = (g) => Math.sqrt(Math.max(0, Math.min(2, g)) / 2);
+  const dbText = (g) => g <= 0.0001 ? "-∞ dB" : (20 * Math.log10(g)).toFixed(1) + " dB";
+  const panText = (v) => Math.abs(v) < 0.01 ? "Centre" : (v < 0 ? "Left " : "Right ") + Math.round(Math.abs(v) * 100);
+
+  // ---- tiles ----
+  const tiles = new Map();   // name -> tile
+  let audioPeers = [];       // from the app, in its order
+  let videoByName = new Map();  // name -> camera track
+
+  function makeTile(name) {
+    const t = document.createElement("section");
+    t.className = "tile"; t.tabIndex = 0;
+    t.setAttribute("aria-label", name);
+    t.innerHTML = `
+      <div class="avatar"><span></span></div>
+      <video autoplay playsinline muted hidden></video>
+      <div class="note" hidden></div>
+      <div class="pan ctl"><small>L</small><input type="range" min="-1" max="1" step="0.01" value="0"><small>R</small></div>
+      <div class="vol ctl"><output>0.0</output><input type="range" min="0" max="1" step="0.001"></div>
+      <div class="label"><span class="name"></span><span class="muted" hidden>Muted</span></div>
+      <div class="buttons ctl"><button type="button" class="flip">Audio options</button></div>`;
+    const tile = { name, el: t, video: t.querySelector("video"), avatar: t.querySelector(".avatar"),
+                   note: t.querySelector(".note"), pan: t.querySelector(".pan input"),
+                   vol: t.querySelector(".vol input"), volOut: t.querySelector(".vol output"),
+                   muted: t.querySelector(".muted"), flip: t.querySelector(".flip"), track: null, busyUntil: 0 };
+    t.querySelector(".name").textContent = name;
+    t.querySelector(".avatar span").textContent = (name.trim()[0] || "?").toUpperCase();
+    tile.vol.setAttribute("aria-label", "Volume for " + name);
+    tile.pan.setAttribute("aria-label", "Pan for " + name);
+    tile.flip.setAttribute("aria-label", "Audio options for " + name);
+    tile.flip.title = "Show all audio options for " + name;
+
+    // sliders send at most ~30 times a second, and ignore the app's echo while being moved
+    const pending = {};  // newest unsent message per kind ("gain", "pan")
+    const queue = (msg) => {
+      const first = !pending[msg.t];
+      pending[msg.t] = msg;
+      if (first) setTimeout(() => { send(pending[msg.t]); delete pending[msg.t]; }, 33);
+    };
+    const busy = () => { tile.busyUntil = performance.now() + 700; };
+    tile.vol.addEventListener("input", () => {
+      busy();
+      const g = posToGain(+tile.vol.value);
+      tile.volOut.textContent = dbText(g);
+      tile.vol.setAttribute("aria-valuetext", dbText(g));
+      queue({ t: "gain", id: name, v: g });
+    });
+    tile.pan.addEventListener("input", () => {
+      busy();
+      tile.pan.setAttribute("aria-valuetext", panText(+tile.pan.value));
+      queue({ t: "pan", id: name, v: +tile.pan.value });
+    });
+    // double-click returns to 0 dB / centre, like the app's sliders
+    tile.vol.addEventListener("dblclick", () => { tile.vol.value = gainToPos(1); tile.vol.dispatchEvent(new Event("input")); });
+    tile.pan.addEventListener("dblclick", () => { tile.pan.value = 0; tile.pan.dispatchEvent(new Event("input")); });
+    for (const el of [tile.vol, tile.pan]) {
+      el.addEventListener("pointerdown", () => t.classList.add("dragging"));
+      el.addEventListener("pointerup", () => t.classList.remove("dragging"));
+    }
+    tile.flip.addEventListener("click", () => send({ t: "flip", id: name }));
+    return tile;
+  }
+
+  function render() {
+    // everyone the app hears, then anyone with video the app doesn't know yet
+    const names = audioPeers.map((p) => p.id);
+    for (const n of videoByName.keys()) if (!names.includes(n)) names.push(n);
+
+    for (const [n, tile] of tiles) {
+      if (!names.includes(n)) { if (tile.track) tile.track.detach(tile.video); tile.el.remove(); tiles.delete(n); }
+    }
+    const grid = $("grid");
+    names.forEach((n, i) => {
+      let tile = tiles.get(n);
+      if (!tile) { tile = makeTile(n); tiles.set(n, tile); }
+      if (grid.children[i] !== tile.el) grid.insertBefore(tile.el, grid.children[i] || null);
+      update(tile);
+    });
+
+    const cols = Math.ceil(Math.sqrt(names.length || 1));
+    const rows = Math.ceil((names.length || 1) / cols);
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    $("empty").hidden = names.length > 0;
+    state.peers = names;
+    sendRects();
+  }
+
+  function update(tile) {
+    const p = audioPeers.find((x) => x.id === tile.name);
+    const track = videoByName.get(tile.name) || null;
+    if (tile.track !== track) {
+      if (tile.track) tile.track.detach(tile.video);
+      tile.track = track;
+      if (track) track.attach(tile.video);
+    }
+    tile.video.hidden = !track;
+    tile.avatar.hidden = !!track;
+
+    const hasAudio = !!p;
+    for (const el of [tile.vol, tile.pan, tile.flip]) el.disabled = !hasAudio;
+    tile.note.hidden = hasAudio && p.connected !== false;
+    tile.note.textContent = !hasAudio ? "Video only – audio not connected yet" : "Connecting audio…";
+    if (!hasAudio) return;
+
+    tile.muted.hidden = !p.muted;
+    tile.el.classList.toggle("speaking", p.level > 0.45 && !p.muted);
+    tile.el.classList.toggle("flipped", state.flipped === tile.name);
+    if (performance.now() > tile.busyUntil) {
+      tile.vol.value = gainToPos(p.gain);
+      tile.volOut.textContent = dbText(p.gain);
+      tile.vol.setAttribute("aria-valuetext", dbText(p.gain));
+      tile.pan.value = p.pan;
+      tile.pan.setAttribute("aria-valuetext", panText(p.pan));
+    }
+  }
+
+  // tile positions as fractions of the page, so the app can lay its audio options exactly over one
+  let lastRects = "";
+  function sendRects() {
+    const W = window.innerWidth || 1, H = window.innerHeight || 1, rects = {};
+    for (const [n, tile] of tiles) {
+      const r = tile.el.getBoundingClientRect();
+      rects[n] = [r.left / W, r.top / H, r.width / W, r.height / H].map((v) => Math.round(v * 10000) / 10000);
+    }
+    const json = JSON.stringify(rects);
+    if (json !== lastRects) { lastRects = json; send({ t: "rects", rects }); }
+  }
+  new ResizeObserver(sendRects).observe($("grid"));
+
+  // ---- messages from the app ----
+  if (host) {
+    host.addEventListener("message", (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch (_) { return; }
+      if (!m || m.t !== "state" || !Array.isArray(m.peers)) return;
+      audioPeers = m.peers.filter((p) => p && typeof p.id === "string").slice(0, 32);
+      state.flipped = typeof m.flipped === "string" ? m.flipped : "";
+      render();
+    });
+    send({ t: "ready" });
+  }
+
+  // ---- demo: made-up people for design checks in a plain browser ----
+  if (demo) {
+    const n = Math.max(1, Math.min(9, +(params.get("people") || 2)));
+    const names = ["Ms. Rivera", "Sam", "Alex", "Jordan", "Priya", "Lee", "Noor", "Kim", "Tomas"];
+    audioPeers = names.slice(0, n).map((id, i) => ({ id, gain: 1, pan: 0, stereo: false, muted: i === 2, connected: true, level: i === 0 ? 0.6 : 0.1 }));
+    render();
+    if (params.get("hover")) { const t = tiles.get(names[0]); if (t) t.el.classList.add("dragging"); }
+    return;
+  }
+
+  // ---- video (LiveKit) ----
+  const LK = window.LivekitClient;
+  const sfuUrl = params.get("url") || "", token = params.get("token") || "";
+  if (!LK) { setStatus("Video couldn't load. Check your internet connection."); return; }
+  if (!/^wss:\/\//.test(sfuUrl) && !/^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(sfuUrl) || !token) {
+    setStatus("This video link isn't complete. Leave the lesson and press Join again.");
+    return;
+  }
+
+  const room = new LK.Room({
+    adaptiveStream: true, dynacast: true,
+    videoCaptureDefaults: { resolution: LK.VideoPresets.h720.resolution },
+    publishDefaults: { simulcast: true, videoCodec: "vp8" },
+  });
+
+  function collectVideo() {
+    const next = new Map();
+    room.remoteParticipants.forEach((p) => {
+      p.trackPublications.forEach((pub) => {
+        if (pub.kind === "video" && pub.track && !pub.isMuted && pub.source === LK.Track.Source.Camera && p.name)
+          next.set(p.name, pub.track);
+      });
+    });
+    videoByName = next;
+    state.videoNames = [...next.keys()];
+    render();
+  }
+
+  async function startCamera() {
+    try {
+      let saved = null;
+      try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
+      await room.localParticipant.setCameraEnabled(true, saved ? { deviceId: saved } : undefined);
+      const pub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+      if (pub && pub.track) { pub.track.attach($("self").querySelector("video")); $("self").hidden = false; }
+    } catch (e) {
+      setStatus(e && e.name === "NotAllowedError"
+        ? "CanDuet isn't allowed to use your camera. Allow it in Windows Settings › Privacy › Camera."
+        : "Your camera couldn't start. Close other apps that use it.");
+    }
+  }
+
+  room
+    .on(LK.RoomEvent.TrackSubscribed, collectVideo)
+    .on(LK.RoomEvent.TrackUnsubscribed, collectVideo)
+    .on(LK.RoomEvent.TrackMuted, collectVideo)
+    .on(LK.RoomEvent.TrackUnmuted, collectVideo)
+    .on(LK.RoomEvent.ParticipantConnected, collectVideo)
+    .on(LK.RoomEvent.ParticipantDisconnected, collectVideo)
+    .on(LK.RoomEvent.Reconnecting, () => setStatus("Video connection lost. Reconnecting…"))
+    .on(LK.RoomEvent.Reconnected, () => { setStatus(""); collectVideo(); })
+    .on(LK.RoomEvent.Disconnected, () => setStatus("Video has ended. Your lesson audio is not affected."));
+
+  setStatus("Connecting video…");
+  room.connect(sfuUrl, token)
+    .then(async () => { state.phase = "connected"; setStatus(""); collectVideo(); await startCamera(); })
+    .catch(() => { state.phase = "error"; setStatus("Video couldn't connect. Your lesson audio still works."); });
+  window.addEventListener("pagehide", () => room.disconnect());
+})();
+</script>
+</body>
+</html>

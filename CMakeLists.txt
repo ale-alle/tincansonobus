@@ -12,6 +12,7 @@ cmake_minimum_required(VERSION 3.15)
 set(TINCAN_API_BASE "https://tincanstudios.ca" CACHE STRING "Tin Can app server that redeems tincan://join tickets")
 set(TINCAN_SERVER_HOST "" CACHE STRING "Default connection server host (empty keeps aoo.sonobus.net until T-023)")
 set(TINCAN_SERVER_PORT "" CACHE STRING "Default connection server port (empty keeps 10998)")
+set(TINCAN_DATA_FOLDER "CanDuet" CACHE STRING "Folder under %APPDATA% for settings and logs; give test builds their own (e.g. CanDuet-Tiles)")
 set(TINCAN_SERVER_DEFS "")
 if (NOT "${TINCAN_SERVER_HOST}" STREQUAL "")
     list(APPEND TINCAN_SERVER_DEFS TINCAN_SERVER_HOST="${TINCAN_SERVER_HOST}")
@@ -385,8 +386,11 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanTools.cpp
         Source/TinCanTools.h
         Source/TinCanTheme.h
+        Source/TinCanPaths.h
         Source/TinCanVideo.cpp
         Source/TinCanVideo.h
+        Source/TinCanVideoTiles.cpp
+        Source/TinCanVideoTiles.h
         Source/TinCanWorkspace.cpp
         Source/TinCanWorkspace.h
         Source/TinCanRecording.cpp
@@ -532,6 +536,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         FF_AUDIO_ALLOW_ALLOCATIONS_IN_MEASURE_BLOCK=0
         SONOBUS_BUILD_VERSION="${VERSION}"
         TINCAN_API_BASE="${TINCAN_API_BASE}"
+        TINCAN_DATA_FOLDER="${TINCAN_DATA_FOLDER}"
         ${TINCAN_SERVER_DEFS}
         ${PLAT_COMPILE_DEFS} )
 

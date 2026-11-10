@@ -4,6 +4,7 @@
 
 
 #include "SonobusPluginProcessor.h"
+#include "TinCanPaths.h"
 #include "TinCanRecording.h"
 #include "SonobusPluginEditor.h"
 
@@ -383,8 +384,7 @@ static void tincan_log(const String & text)
     static CriticalSection lock;
     const ScopedLock sl(lock);
 
-    auto file = File::getSpecialLocation(File::userApplicationDataDirectory)
-                    .getChildFile("CanDuet").getChildFile("connection-log.txt");
+    auto file = TinCan::getDataFolder().getChildFile("connection-log.txt");
     file.getParentDirectory().createDirectory();
     if (file.getSize() > 256 * 1024) file.deleteFile();
     file.appendText(Time::getCurrentTime().toISO8601(true) + " " + text + "\n");
@@ -791,7 +791,7 @@ mState (*this, &mUndoManager, "SonoBusAoO",
     
     // use this to match our main app support dir
     PropertiesFile::Options options;
-    options.applicationName     = "CanDuet";
+    options.applicationName     = TinCan::getDataFolderName();
     options.filenameSuffix      = ".xml";
     options.osxLibrarySubFolder = "Application Support/CanDuet";
    #if JUCE_LINUX

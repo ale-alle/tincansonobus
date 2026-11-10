@@ -44,6 +44,8 @@ struct InternalWebViewType
     virtual void focusGained() {}
     virtual void setWebViewSize (int, int) = 0;
 
+    virtual void postWebMessage (const String&) {}  // Tin Can patch
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InternalWebViewType)
 };
 
@@ -457,6 +459,12 @@ public:
                || webView2ConstructionHelper.viewsWaitingForCreation.count (this) > 0;
     }
 
+    void postWebMessage (const String& message) override  // Tin Can patch
+    {
+        if (webView != nullptr)
+            webView->PostWebMessageAsString (message.toWideCharPointer());
+    }
+
     void goToURL (const String& url, const StringArray* headers, const MemoryBlock* postData) override
     {
         urlRequest = { url,
@@ -628,6 +636,21 @@ private:
                     return S_OK;
                 }).Get(), &newWindowRequestedToken);
 
+            // Tin Can patch: messages from the page
+            webView->add_WebMessageReceived (Callback<ICoreWebView2WebMessageReceivedEventHandler> (
+                [this] (ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT
+                {
+                    LPWSTR source = nullptr, text = nullptr;
+
+                    // fails when the page posted something other than a string; ignore those
+                    if (args->get_Source (&source) == S_OK && args->TryGetWebMessageAsString (&text) == S_OK)
+                        owner.webMessageReceived (String (source), String (text));
+
+                    if (source != nullptr) CoTaskMemFree (source);
+                    if (text != nullptr)   CoTaskMemFree (text);
+                    return S_OK;
+                }).Get(), &webMessageReceivedToken);
+
             webView->add_WindowCloseRequested (Callback<ICoreWebView2WindowCloseRequestedEventHandler> (
                 [this] (ICoreWebView2*, IUnknown*) -> HRESULT
                 {
@@ -768,6 +791,9 @@ private:
 
             if (windowCloseRequestedToken.value != 0)
                 webView->remove_WindowCloseRequested (windowCloseRequestedToken);
+
+            if (webMessageReceivedToken.value != 0)
+                webView->remove_WebMessageReceived (webMessageReceivedToken);
 
             if (navigationCompletedToken.value != 0)
                 webView->remove_NavigationCompleted (navigationCompletedToken);
@@ -965,7 +991,8 @@ private:
                            windowCloseRequestedToken { 0 },
                            navigationCompletedToken  { 0 },
                            webResourceRequestedToken { 0 },
-                           moveFocusRequestedToken   { 0 };
+                           moveFocusRequestedToken   { 0 },
+                           webMessageReceivedToken   { 0 };  // Tin Can patch
 
     bool inMoveFocusRequested = false;
 
@@ -1085,9 +1112,16 @@ void WebBrowserComponent::goForward()
     browser->getInternalWebView().goForward();
 }
 
+void WebBrowserComponent::webMessageReceived (const String&, const String&) {}  // Tin Can patch
+
 void WebBrowserComponent::refresh()
 {
     browser->getInternalWebView().refresh();
+}
+
+void WebBrowserComponent::postWebMessage (const String& message)  // Tin Can patch
+{
+    browser->getInternalWebView().postWebMessage (message);
 }
 
 //==============================================================================

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Tin Can Studios
 
 #include "TinCanVideo.h"
+#include "TinCanPaths.h"
 #include "TinCanTheme.h"
 #include "TinCanJoin.h"
 
@@ -133,8 +134,7 @@ private:
 
 WebBrowserComponent::Options makeWebViewOptions()
 {
-    auto dataFolder = File::getSpecialLocation(File::userApplicationDataDirectory)
-                          .getChildFile("CanDuet").getChildFile("WebView2");
+    auto dataFolder = TinCan::getDataFolder().getChildFile("WebView2");
     auto loader = File::getSpecialLocation(File::currentExecutableFile).getSiblingFile("WebView2Loader.dll");
 
     return WebBrowserComponent::Options{}
