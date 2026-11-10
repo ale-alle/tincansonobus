@@ -4,6 +4,7 @@
 
 
 #include "SonobusPluginProcessor.h"
+#include "TinCanJoin.h"
 #include "TinCanPaths.h"
 #include "TinCanRecording.h"
 #include "TinCanVideoTiles.h"
@@ -8930,7 +8931,8 @@ void SonobusAudioProcessor::setStateInformationWithOptions (const void* data, in
         if (mFreshInit) {
             // only do initial auto reconnect on the first state restore
             
-            if (getAutoReconnectToLast() && !isConnectedToServer()) {
+            // lessons need a fresh ticket, so never rejoin the last group on start
+            if (getAutoReconnectToLast() && !isConnectedToServer() && !TinCan::isLessonOnly()) {
                 reconnectToMostRecent();
             }
 

@@ -706,7 +706,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 
 
     mConnectButton = std::make_unique<SonoTextButton>("directconnect");
-    mConnectButton->setButtonText(TRANS("Connect..."));
+    mConnectButton->setButtonText(TinCan::isLessonOnly() ? TRANS("Join a lesson...") : TRANS("Connect..."));
     mConnectButton->addListener(this);
     mConnectButton->setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
     mConnectButton->setColour(TextButton::buttonOnColourId, TinCanTheme::raised);
@@ -1353,7 +1353,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 #endif
 
         // look for link in clipboard        
-        if (mConnectView->attemptToPasteConnectionFromClipboard()) {
+        if (!TinCan::isLessonOnly() && mConnectView->attemptToPasteConnectionFromClipboard()) {
             // show connect immediately
             showConnectPopup(true);
             // switch to group page
@@ -2070,7 +2070,10 @@ void SonobusAudioProcessorEditor::buttonClicked (Button* buttonThatWasClicked)
                 mConnectButton->setTextJustification(Justification::centred);
             }
 
-            if (!mConnectView->isVisible()) {
+            if (TinCan::isLessonOnly()) {
+                showJoinFromMyLessons();
+            }
+            else if (!mConnectView->isVisible()) {
                 showConnectPopup(true);
             } else {
                 showConnectPopup(false);
@@ -3363,6 +3366,8 @@ void SonobusAudioProcessorEditor::handleURL(const String & urlstr)
         return;
     }
 
+    if (TinCan::isLessonOnly()) return;  // only canduet:// lesson links
+
     URL url(urlstr);
     if (url.isWellFormed()) {
         if (!currConnected || currGroup.isEmpty()) {
@@ -4129,7 +4134,7 @@ void SonobusAudioProcessorEditor::updateState(bool rebuildInputChannels)
         mConnectButton->setToggleState(true, dontSendNotification);
     }
     else {
-        mConnectButton->setButtonText(TRANS("Connect..."));
+        mConnectButton->setButtonText(TinCan::isLessonOnly() ? TRANS("Join a lesson...") : TRANS("Connect..."));
         mConnectButton->setToggleState(false, dontSendNotification);
 
         // Tin Can: the server sends existing members before its "joined" reply, so a person can be
@@ -4256,7 +4261,7 @@ void SonobusAudioProcessorEditor::updateState(bool rebuildInputChannels)
 
         if (processor.getNumberRemotePeers() == 0 /* || !currConnected */ ) {
             String message;
-            message += TRANS("Press Connect button to start.") + "\n\n" + TRANS("Please use headphones if you are using a microphone!");
+            message += (TinCan::isLessonOnly() ? TRANS("Press Join a lesson to start.") : TRANS("Press Connect button to start.")) + "\n\n" + TRANS("Please use headphones if you are using a microphone!");
             mMainMessageLabel->setText(message, dontSendNotification);
         } else {
             mMainMessageLabel->setText("", dontSendNotification);
@@ -4636,7 +4641,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
             showLatencyMatchPrompt(ev.message, ev.floatVal);
         }
         else if (ev.type == ClientEvent::PeerSuggestedNewGroupEvent) {
-            showSuggestedGroupPrompt(ev.user, ev.group, ev.message, ev.success, ev.array);
+            if (!TinCan::isLessonOnly()) showSuggestedGroupPrompt(ev.user, ev.group, ev.message, ev.success, ev.array);
         }
         else if (ev.type == ClientEvent::PeerBlockedInfoChangedEvent) {
             updatePeerState(true);
@@ -4690,8 +4695,29 @@ void SonobusAudioProcessorEditor::copyGroupLink()
 #endif
 }
 
+void SonobusAudioProcessorEditor::showJoinFromMyLessons()
+{
+    auto options = MessageBoxOptions()
+        .withIconType(MessageBoxIconType::InfoIcon)
+        .withTitle(TRANS("Join a lesson"))
+        .withMessage(TRANS("Lessons start from My lessons on the Tin Can Studios website. Sign in, find your lesson, and press Join. CanDuet opens and connects you."))
+        .withButton(TRANS("Open My lessons"))
+        .withButton(TRANS("Close"))
+        .withAssociatedComponent(this);
+
+    AlertWindow::showAsync(options, [](int result) {
+        if (result == 1) URL(TinCan::getMyLessonsURL()).launchInDefaultBrowser();
+    });
+}
+
 void SonobusAudioProcessorEditor::showGroupMenu(bool show)
 {
+    if (TinCan::isLessonOnly()) {
+        // group links, VDO.Ninja and moving to another group are gone; latency match is what's left
+        if (show) showLatencyMatchView(true);
+        return;
+    }
+
     Array<GenericItemChooserItem> items;
 
 #if JUCE_IOS || JUCE_ANDROID
@@ -5356,7 +5382,7 @@ void SonobusAudioProcessorEditor::updateLayout()
     mainGroupLayoutBox.items.add(FlexItem(4, 4));
     mainGroupLayoutBox.items.add(FlexItem(24, minitemheight, *mMainPeerLabel).withMargin(0).withFlex(0));
     mainGroupLayoutBox.items.add(FlexItem(minButtonWidth, minitemheight - 5, mainGroupUserBox).withMargin(0).withFlex(1));
-    if (processor.isConnectedToServer() && processor.getCurrentJoinedGroup().isNotEmpty() && !isReallyNarrow) {
+    if (processor.isConnectedToServer() && processor.getCurrentJoinedGroup().isNotEmpty() && !isReallyNarrow && !TinCan::isLessonOnly()) {
         mainGroupLayoutBox.items.add(FlexItem(3, 4).withMargin(1).withFlex(0.0));
         mainGroupLayoutBox.items.add(FlexItem(toolwidth, minitemheight, *mVideoButton).withMargin(0).withFlex(0));
         mVideoButton->setVisible(true);
@@ -5386,7 +5412,7 @@ void SonobusAudioProcessorEditor::updateLayout()
     }
     titleBox.items.add(FlexItem(4, 4).withMargin(1).withFlex(0.0));
     titleBox.items.add(FlexItem(minButtonWidth, minitemheight, *mConnectButton).withMargin(0).withFlex(1));
-    if (processor.isConnectedToServer() && processor.getCurrentJoinedGroup().isNotEmpty()) {
+    if (processor.isConnectedToServer() && processor.getCurrentJoinedGroup().isNotEmpty() && !TinCan::isLessonOnly()) {
         titleBox.items.add(FlexItem(3, 4).withMargin(1).withFlex(0.0));
         titleBox.items.add(FlexItem(toolwidth, minitemheight, *mAltConnectButton).withMargin(0).withFlex(0));
         mAltConnectButton->setVisible(true);
@@ -6465,16 +6491,16 @@ bool SonobusAudioProcessorEditor::perform (const InvocationInfo& info) {
             break;
 
         case SonobusCommands::CopyGroupLink:
-            copyGroupLink();
+            if (!TinCan::isLessonOnly()) copyGroupLink();
             break;
         case SonobusCommands::GroupLatencyMatch:
             showLatencyMatchView(true);
             break;
         case SonobusCommands::VDONinjaVideoLink:
-            showVDONinjaView(true, mVideoButton->isShowing());
+            if (!TinCan::isLessonOnly()) showVDONinjaView(true, mVideoButton->isShowing());
             break;
         case SonobusCommands::SuggestNewGroup:
-            showSuggestGroupView(true);
+            if (!TinCan::isLessonOnly()) showSuggestGroupView(true);
             break;
         case SonobusCommands::ResetAllJitterBuffers:
             resetJitterBufferForAll();
@@ -6579,10 +6605,12 @@ PopupMenu SonobusAudioProcessorEditor::SonobusMenuBarModel::getMenuForIndex (int
             retval.addCommandItem (&parent.commandManager, SonobusCommands::ResetAllJitterBuffers);
             break;
         case MenuGroupIndex:
-            retval.addCommandItem (&parent.commandManager, SonobusCommands::CopyGroupLink);
+            if (!TinCan::isLessonOnly()) retval.addCommandItem (&parent.commandManager, SonobusCommands::CopyGroupLink);
             retval.addCommandItem (&parent.commandManager, SonobusCommands::GroupLatencyMatch);
-            retval.addCommandItem (&parent.commandManager, SonobusCommands::VDONinjaVideoLink);
-            retval.addCommandItem (&parent.commandManager, SonobusCommands::SuggestNewGroup);
+            if (!TinCan::isLessonOnly()) {
+                retval.addCommandItem (&parent.commandManager, SonobusCommands::VDONinjaVideoLink);
+                retval.addCommandItem (&parent.commandManager, SonobusCommands::SuggestNewGroup);
+            }
             break;
         case MenuTransportIndex:
             retval.addCommandItem (&parent.commandManager, SonobusCommands::TogglePlayPause);

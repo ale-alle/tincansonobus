@@ -203,6 +203,7 @@ private:
     void showEffectsConfig(bool flag);
 
     void showGroupMenu(bool show);
+    void showJoinFromMyLessons();  // lesson-only builds: where to join instead of a connect page
 
     void showConnectPopup(bool flag);
 

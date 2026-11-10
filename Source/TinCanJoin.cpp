@@ -86,6 +86,17 @@ String getApiBase()
     return base;
 }
 
+bool isLessonOnly()
+{
+    static const bool lessonOnly = SystemStats::getEnvironmentVariable("TINCAN_DEV_CONNECT", {}) != "1";
+    return lessonOnly;
+}
+
+String getMyLessonsURL()
+{
+    return getApiBase() + "/my-lessons";
+}
+
 JoinResult parseRedeemResponse(int httpStatus, const String & body)
 {
     JoinResult result;

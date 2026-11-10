@@ -50,6 +50,15 @@ bool parseJoinURL(const String & url, String & ticketOut);
 // with the TINCAN_API_BASE environment variable. Only https (or http to localhost) is accepted.
 String getApiBase();
 
+// Lessons are the only way in (owner 2026-11-10): people join from My lessons on the website, and the
+// ticket sets the server. No server field, public groups, direct connections, group links or
+// VDO.Ninja. Practice rooms can come later through tickets too. TINCAN_DEV_CONNECT=1 (environment)
+// brings SonoBus's own connect page back for development only.
+bool isLessonOnly();
+
+// the website's My lessons page, where Join links live
+String getMyLessonsURL();
+
 // parses the redeem response body into result (exposed for tests)
 JoinResult parseRedeemResponse(int httpStatus, const String & body);
 
