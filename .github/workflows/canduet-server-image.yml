@@ -1,10 +1,10 @@
 # Builds the canduet-server Docker image (server/docker/Dockerfile, D-025) and publishes it to
-# GitHub's container registry as ghcr.io/<owner>/canduet-server:main and :<commit>.
+# GitHub's container registry as ghcr.io/<owner>/canduet-server:<commit> (and :main from main).
 name: canduet-server image
 
+# Every branch builds and publishes :<commit>; only main also moves :main (what servers pull).
 on:
   push:
-    branches: [main]
     paths:
       - server/relay/**
       - server/docker/Dockerfile*
@@ -36,8 +36,8 @@ jobs:
           file: server/docker/Dockerfile
           push: true
           tags: |
-            ${{ env.IMAGE }}:main
             ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}:main', env.IMAGE) || '' }}
       - name: Smoke test (refuses to start without a relay address)
         run: |
           set +e
