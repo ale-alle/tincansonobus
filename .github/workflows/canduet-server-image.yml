@@ -1,0 +1,46 @@
+# Builds the canduet-server Docker image (server/docker/Dockerfile, D-025) and publishes it to
+# GitHub's container registry as ghcr.io/<owner>/canduet-server:main and :<commit>.
+name: canduet-server image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - server/relay/**
+      - server/docker/Dockerfile*
+      - deps/aoo/lib/**
+      - deps/aoo/deps/**
+      - .github/workflows/canduet-server-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name (registry names must be lower case)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/canduet-server" >> "$GITHUB_ENV"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/docker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:main
+            ${{ env.IMAGE }}:${{ github.sha }}
+      - name: Smoke test (refuses to start without a relay address)
+        run: |
+          set +e
+          docker run --rm "$IMAGE:${{ github.sha }}" 2>err.txt; code=$?
+          cat err.txt
+          [ "$code" = 2 ] && grep -q -- "--relay-ip is required" err.txt

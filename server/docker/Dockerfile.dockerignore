@@ -1,0 +1,5 @@
+# Only what the server build needs goes to Docker (the repo holds JUCE, builds and test kits)
+*
+!deps/aoo/lib
+!deps/aoo/deps
+!server/relay

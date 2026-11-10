@@ -11,3 +11,9 @@ out/
 tickets.env
 canduet-relay-setup/
 CanDuet-Test-*.zip
+
+# Docker media server: secrets and generated files stay on the server (doc/TINCAN-DOCKER.md)
+server/docker/.env
+server/docker/generated/
+server/docker/caddy_data/
+server/docker/test-api/

@@ -1,0 +1,58 @@
+# One CanDuet media server (D-025): connection server + audio relay, LiveKit video, Caddy for TLS.
+# Settings live in .env (copy env.example); run ./configure.sh once, then `docker compose up -d`.
+# Every service uses host networking: media needs wide UDP port ranges and the real public address.
+services:
+  canduet-server:
+    image: ${CANDUET_SERVER_IMAGE:-ghcr.io/ale-alle/canduet-server:main}
+    build:
+      context: ../..
+      dockerfile: server/docker/Dockerfile
+    command: ["--relay-ip", "${PUBLIC_IP:?run configure.sh}", "--port", "${AOO_PORT:-10998}",
+              "--relay-ports", "${RELAY_PORT_FIRST:-40000}-${RELAY_PORT_LAST:-40999}"]
+    network_mode: host
+    restart: unless-stopped
+    ulimits:
+      nofile: 8192                       # one socket per relayed participant (T-048)
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  livekit:
+    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.9}
+    command: ["--config", "/etc/livekit.yaml"]
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./generated/livekit.yaml:/etc/livekit.yaml:ro
+
+  caddy:
+    image: ${CADDY_IMAGE:-livekit/caddyl4:v2.11.3}   # Caddy with the layer4 module, as LiveKit's generator uses
+    command: ["run", "--config", "/etc/caddy.yaml", "--adapter", "yaml"]
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./generated/caddy.yaml:/etc/caddy.yaml:ro
+      - ./caddy_data:/data
+
+  # Test join service (stand-in for the rooms-worker): `docker compose --profile test-api up -d`.
+  # Needs test-api/redeem.py (scripts/tincan-mock-redeem.py) and test-api/index.html (video-page).
+  test-api:
+    profiles: [test-api]
+    image: ${PYTHON_IMAGE:-python:3.12-slim}
+    command: ["python", "-I", "/app/redeem.py"]
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    user: "65534:65534"
+    volumes:
+      - ./test-api:/app:ro
+    environment:
+      MOCK_PORT: "8788"
+      MOCK_TICKETS: ${MOCK_TICKETS:?set MOCK_TICKETS in .env}
+      MOCK_SERVER: ${RTC_DOMAIN}:${AOO_PORT:-10998}
+      MOCK_VIDEO_URL: wss://${RTC_DOMAIN}
+      MOCK_VIDEO_KEY: ${LIVEKIT_API_KEY}
+      MOCK_VIDEO_SECRET: ${LIVEKIT_API_SECRET}
+      MOCK_VIDEO_TTL: "86400"
+      MOCK_VIDEO_PAGE: /app/index.html
+      MOCK_ROOM_SEED: ${MOCK_ROOM_SEED}
