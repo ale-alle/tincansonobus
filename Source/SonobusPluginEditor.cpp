@@ -709,8 +709,8 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     mConnectButton->setButtonText(TRANS("Connect..."));
     mConnectButton->addListener(this);
     mConnectButton->setColour(TextButton::buttonColourId, TinCanTheme::stringStrong);
-    mConnectButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.6, 0.4, 0.6, 0.6));
-    mConnectButton->setColour(SonoTextButton::outlineColourId, Colour::fromFloatRGBA(0.5, 0.5, 0.5, 0.4));
+    mConnectButton->setColour(TextButton::buttonOnColourId, TinCanTheme::raised);
+    mConnectButton->setColour(SonoTextButton::outlineColourId, TinCanTheme::lineStrong);
     mConnectButton->setTextJustification(Justification::centred);
 
 
@@ -1753,6 +1753,17 @@ void SonobusAudioProcessorEditor::aooClientPeerChangedState(SonobusAudioProcesso
 
 void SonobusAudioProcessorEditor::sbChatEventReceived(SonobusAudioProcessor *comp, const SBChatEvent & mesg)
 {
+    if (mesg.tags == TinCan::kVideoIdTag) {
+        // never shown in chat; arrives off the message thread
+        auto identity = TinCan::parseVideoIdMessage(mesg.message);
+        auto from = mesg.from;
+        Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+        if (identity.isNotEmpty()) MessageManager::callAsync([safeThis, from, identity]() {
+            if (safeThis && safeThis->mPeerContainer) safeThis->mPeerContainer->setPeerVideoId(from, identity);
+        });
+        return;
+    }
+
     if (TinCan::isRecordingTag(mesg.tags)) {
         {
             const ScopedLock sl(mRecordingMsgLock);
@@ -2739,6 +2750,14 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
                 tiles = TinCan::VideoTilesView::create(result.video, info.userName);
 
             if (tiles) {
+                safeThis->mVideoIdentity = TinCan::getVideoIdentity(result.video.token);
+                safeThis->mPeerContainer->onShareVideoId = [safeThis]() {
+                    if (!safeThis || safeThis->mVideoIdentity.isEmpty()) return;
+                    auto & proc = safeThis->processor;
+                    SBChatEvent ev(SBChatEvent::UserType, proc.getCurrentJoinedGroup(), safeThis->getMyLessonName(), "",
+                                   TinCan::kVideoIdTag, TinCan::makeVideoIdMessage(safeThis->mVideoIdentity));
+                    proc.sendChatEvent(ev);
+                };
                 safeThis->mPeerContainer->showVideoTiles(std::move(tiles));
             }
             else {
@@ -3333,6 +3352,7 @@ void SonobusAudioProcessorEditor::showWorkspace()
 void SonobusAudioProcessorEditor::closeLessonVideo()
 {
     mVideoWindow.reset();
+    mVideoIdentity.clear();
     if (mPeerContainer) mPeerContainer->closeVideoTiles();
 }
 
@@ -4419,6 +4439,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
         }
         else if (ev.type == ClientEvent::ConnectEvent) {
             String statstr;
+            mRetryingWithNewName = false;
             if (ev.success) {
                 statstr = TRANS("Connected to server");                
             } else {
@@ -4427,6 +4448,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
 
                     // try again with different username (auto-incremented)
                     currConnectionInfo.userName = generateNewUsername(currConnectionInfo);
+                    mRetryingWithNewName = true;  // same lesson, so keep its video open
 
                     DBG("Trying again with name: " << currConnectionInfo.userName);
                     connectWithInfo(currConnectionInfo, true);
@@ -4480,7 +4502,7 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
             updateState();
         }
         else if (ev.type == ClientEvent::DisconnectEvent) {
-            closeLessonVideo();
+            if (!mRetryingWithNewName) closeLessonVideo();
             applyRecording(mRecordingConsent.stop(), RecordingCause::Local);
             String statstr;
             if (ev.success) {

@@ -6,6 +6,7 @@
 #include "SonobusPluginProcessor.h"
 #include "TinCanPaths.h"
 #include "TinCanRecording.h"
+#include "TinCanVideoTiles.h"
 #include "SonobusPluginEditor.h"
 
 #include "RunCumulantor.h"
@@ -2809,8 +2810,9 @@ bool SonobusAudioProcessor::handleOtherMessage(EndpointState * endpoint, const c
 
             if (!isAddressBlocked(endpoint->ipaddr)) {
 
-                // Tin Can recording control messages (T-045) go to the editor, never into the chat
-                if (!TinCan::isRecordingTag(tags))
+                // Tin Can recording control messages (T-045) and video identities (video tiles) go to the
+                // editor, never into the chat
+                if (!TinCan::isRecordingTag(tags) && tags != TinCan::kVideoIdTag)
                     mAllChatEvents.add(chatevent);
                 clientListeners.call(&SonobusAudioProcessor::ClientListener::sbChatEventReceived, this, chatevent);
             }

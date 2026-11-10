@@ -28,6 +28,22 @@ namespace TinCan {
 // tiles page: TINCAN_VIDEO_TILES_PAGE (https, or http to localhost), else <video page>tiles.html
 String getVideoTilesPage();
 
+// Matching people to their video. Display names can repeat (the audio room renames a second
+// "Sam" to "Sam 2", the video room doesn't), so each app tells the others its video identity
+// (the random per-lesson "sub" of its own LiveKit token) in a peer message with this tag:
+//   {"vid":"<identity>"}
+// The page then matches audio people to video by identity, and by name only as a fallback.
+extern const char * const kVideoIdTag;
+
+// the identity inside a LiveKit access token (not verified: only used to match tiles); empty if none
+String getVideoIdentity(const String & token);
+
+// identities are short and plain (LiveKit allows more, ours are "p-" + hex); anything else is ignored
+bool isValidVideoIdentity(const String & identity);
+
+String makeVideoIdMessage(const String & identity);
+String parseVideoIdMessage(const String & json);  // empty unless valid
+
 #if JUCE_WEB_BROWSER && JUCE_USE_WIN_WEBVIEW2
 
 class VideoTilesView : public WebBrowserComponent

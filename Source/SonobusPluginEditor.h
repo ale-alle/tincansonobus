@@ -567,6 +567,8 @@ private:
 
     std::unique_ptr<TinCan::TicketRedeemer> mTicketRedeemer;
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
+    String mVideoIdentity;  // our own LiveKit identity in this lesson, shared with the others (video tiles)
+    bool mRetryingWithNewName = false;  // rejoining as "Name 2" because the name was taken; the lesson goes on
     // Tin Can teaching tools (T-034): on-screen instrument etc., in a window of its own
     std::unique_ptr<TextButton> mToolsButton;
     std::unique_ptr<TinCan::ToolsWindow> mToolsWindow;

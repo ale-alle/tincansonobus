@@ -342,7 +342,8 @@ void PeersContainerView::resized()
         return;
 
     // Calculate grid size
-    int numColumns = static_cast<int>(std::ceil(std::sqrt(numPeers)));
+    // two people sit one above the other (owner 2026-11-10); otherwise as square as possible
+    int numColumns = numPeers == 2 ? 1 : static_cast<int>(std::ceil(std::sqrt(numPeers)));
     int numRows = static_cast<int>(std::ceil(static_cast<float>(numPeers) / numColumns));
 
     juce::Grid grid;
@@ -1981,6 +1982,13 @@ String PeersContainerView::generateLatencyMessage(const SonobusAudioProcessor::L
 void PeersContainerView::timerCallback(int timerId)
 {
     if (timerId == VideoTilesTimerId) {
+        // tell everyone our video identity when someone joins, and every 10 s for anyone who missed it
+        int count = processor.getNumberRemotePeers();
+        if (count != mTilesLastPeerCount || ++mTilesTicks >= 100) {
+            mTilesLastPeerCount = count;
+            mTilesTicks = 0;
+            if (count > 0 && onShareVideoId) onShareVideoId();
+        }
         sendTilesState();
         positionFlipOverlay();
         return;
@@ -2492,11 +2500,17 @@ public:
         : view(view_)
     {
         setOpaque(true);
+        title.setJustificationType(Justification::centredLeft);
+        title.setColour(Label::textColourId, TinCanTheme::text);
+        title.setFont(Font(16.0f, Font::bold));
+        addAndMakeVisible(title);
         backButton.setButtonText(TRANS("Back to video"));
         backButton.onClick = [onBack]() { if (onBack) onBack(); };
         addAndMakeVisible(backButton);
         if (view) addAndMakeVisible(view.getComponent());
     }
+
+    void setTitle(const String & name) { title.setText(TRANS("Audio options for") + " " + name, dontSendNotification); }
 
     // hand the controls back to the grid
     void release(Component & grid)
@@ -2515,6 +2529,7 @@ public:
     void resized() override
     {
         auto r = getLocalBounds().reduced(4);
+        title.setBounds(r.removeFromTop(28).reduced(6, 0));
         backButton.setBounds(r.removeFromBottom(30).removeFromRight(140));
         r.removeFromBottom(4);
         if (view) {
@@ -2525,6 +2540,7 @@ public:
 
 private:
     Component::SafePointer<PeerViewInfo> view;
+    Label title;
     TextButton backButton;
 };
 
@@ -2550,7 +2566,15 @@ void PeersContainerView::closeVideoTiles()
     stopTimer(VideoTilesTimerId);
     setFlipped({});
     mTileRects.clear();
+    mPeerVideoIds.clear();
+    mTilesLastPeerCount = -1;
     mVideoTiles.reset();
+}
+
+void PeersContainerView::setPeerVideoId(const String & userName, const String & identity)
+{
+    if (userName.isEmpty() || !TinCan::isValidVideoIdentity(identity) || mPeerVideoIds.size() > 64) return;
+    mPeerVideoIds[userName] = identity;
 }
 
 int PeersContainerView::findPeerIndexByName(const String & name) const
@@ -2592,6 +2616,8 @@ void PeersContainerView::sendTilesState()
 
         DynamicObject::Ptr p = new DynamicObject();
         p->setProperty("id", name);
+        auto vid = mPeerVideoIds.find(name);
+        if (vid != mPeerVideoIds.end()) p->setProperty("vid", vid->second);
         p->setProperty("gain", processor.getRemotePeerLevelGain(i));
         p->setProperty("pan", pan);
         p->setProperty("stereo", stereo);
@@ -2683,6 +2709,7 @@ void PeersContainerView::setFlipped(const String & name)
         MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->setFlipped({}); });
     });
     mFlippedName = name;
+    mFlipOverlay->setTitle(name);
 
     // a child of the main window's native window, created after the web view so it sits above it
     mFlipOverlay->addToDesktop(0, getTopLevelComponent()->getPeer()->getNativeHandle());
@@ -2702,8 +2729,10 @@ void PeersContainerView::positionFlipOverlay()
         return;
     }
 
+    // with 3 or more tiles one tile is too narrow for the full controls, so they cover the whole
+    // people area (owner 2026-11-10)
     auto page = mVideoTiles->getLocalBounds().toFloat();
-    auto f = it->second;
+    auto f = mTileRects.size() >= 3 ? juce::Rectangle<float>(0.0f, 0.0f, 1.0f, 1.0f) : it->second;
     juce::Rectangle<int> tile = juce::Rectangle<float>(page.getWidth() * f.getX(), page.getHeight() * f.getY(),
                                                        page.getWidth() * f.getWidth(), page.getHeight() * f.getHeight())
                                     .getSmallestIntegerContainer();

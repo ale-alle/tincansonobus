@@ -65,11 +65,17 @@
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; }
   .tile.flipped video, .tile.flipped .avatar { filter: blur(6px) brightness(.4); }
 
-  /* own camera, small, bottom right corner of the whole area */
-  #self { position: absolute; right: 12px; bottom: 48px; width: min(22%, 240px); aspect-ratio: 16 / 9; z-index: 5;
+  /* own camera, small, bottom left above the name label: the right side holds the volume slider
+     and the bottom right the Audio options button */
+  #self { position: absolute; left: 12px; bottom: 44px; width: min(22%, 240px); aspect-ratio: 16 / 9; z-index: 5;
           border-radius: 8px; overflow: hidden; border: 2px solid var(--line-strong); background: #000; }
   #self[hidden] { display: none; }
   #self video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  /* in an empty grid spot (e.g. 3 others in a 2×2 grid) it is a tile of its own */
+  #self.in-grid { position: relative; left: auto; bottom: auto; width: auto; aspect-ratio: auto; z-index: auto;
+                  border-radius: 10px; border: 1px solid var(--line); min-width: 0; min-height: 0; }
+  #self .you { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 6px;
+               background: rgba(10, 15, 30, .72); }
   #self button { position: absolute; left: 6px; bottom: 6px; }
   #status { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 6; padding: 6px 12px;
             border-radius: 8px; background: var(--raised); border: 1px solid var(--line-strong); color: var(--muted); }
@@ -83,6 +89,7 @@
 <div id="empty">Waiting for the other person to join…</div>
 <div id="self" class="ctl-host" hidden>
   <video autoplay playsinline muted aria-label="Your camera"></video>
+  <span class="you">You</span>
 </div>
 <div id="status" role="status" aria-live="polite" hidden></div>
 <script>
@@ -111,7 +118,7 @@
   // ---- tiles ----
   const tiles = new Map();   // name -> tile
   let audioPeers = [];       // from the app, in its order
-  let videoByName = new Map();  // name -> camera track
+  let videos = [];           // [{identity, name, track}] cameras in the video room
 
   function makeTile(name) {
     const t = document.createElement("section");
@@ -167,34 +174,64 @@
     return tile;
   }
 
+  // Who's video is whose: by the identity each app told the others (names can repeat: the audio
+  // room renames a second "Sam" to "Sam 2", the video room doesn't); by name only for someone whose
+  // identity hasn't arrived yet.
+  function matchVideos() {
+    const claimed = new Set(audioPeers.map((p) => p.vid).filter(Boolean));
+    const byPeer = new Map();
+    for (const p of audioPeers) {
+      let v = p.vid ? videos.find((x) => x.identity === p.vid)
+                    : videos.find((x) => x.name === p.id && !claimed.has(x.identity));
+      if (v) { byPeer.set(p.id, v); claimed.add(v.identity); }
+    }
+    state.matches = Object.fromEntries([...byPeer].map(([id, v]) => [id, v.identity]));
+    return { byPeer, videoOnly: videos.filter((v) => !claimed.has(v.identity)) };
+  }
+
   function render() {
     // everyone the app hears, then anyone with video the app doesn't know yet
-    const names = audioPeers.map((p) => p.id);
-    for (const n of videoByName.keys()) if (!names.includes(n)) names.push(n);
+    const { byPeer, videoOnly } = matchVideos();
+    const keys = audioPeers.map((p) => "a:" + p.id).concat(videoOnly.map((v) => "v:" + v.identity));
 
-    for (const [n, tile] of tiles) {
-      if (!names.includes(n)) { if (tile.track) tile.track.detach(tile.video); tile.el.remove(); tiles.delete(n); }
+    for (const [k, tile] of tiles) {
+      if (!keys.includes(k)) { if (tile.track) tile.track.detach(tile.video); tile.el.remove(); tiles.delete(k); }
     }
     const grid = $("grid");
-    names.forEach((n, i) => {
-      let tile = tiles.get(n);
-      if (!tile) { tile = makeTile(n); tiles.set(n, tile); }
+    keys.forEach((k, i) => {
+      let tile = tiles.get(k);
+      if (!tile) {
+        const v = k.startsWith("v:") && videoOnly.find((x) => "v:" + x.identity === k);
+        tile = makeTile(k.startsWith("a:") ? k.slice(2) : (v && v.name) || "Guest");
+        tile.key = k;
+        tiles.set(k, tile);
+      }
       if (grid.children[i] !== tile.el) grid.insertBefore(tile.el, grid.children[i] || null);
-      update(tile);
+      const v = k.startsWith("a:") ? byPeer.get(k.slice(2)) : videoOnly.find((x) => "v:" + x.identity === k);
+      update(tile, k.startsWith("a:"), v ? v.track : null);
     });
 
-    const cols = Math.ceil(Math.sqrt(names.length || 1));
-    const rows = Math.ceil((names.length || 1) / cols);
+    // two people sit one above the other (owner 2026-11-10); otherwise as square as possible
+    const n = keys.length;
+    const cols = n === 2 ? 1 : Math.ceil(Math.sqrt(n || 1));
+    const rows = Math.ceil((n || 1) / cols);
     grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-    $("empty").hidden = names.length > 0;
-    state.peers = names;
+
+    // own camera takes an empty grid spot when there is one, else stays small in the corner
+    const self = $("self");
+    const inGrid = n > 0 && cols * rows > n;
+    if (inGrid && self.parentNode !== grid) grid.appendChild(self);
+    if (!inGrid && self.parentNode === grid) document.body.insertBefore(self, $("status"));
+    self.classList.toggle("in-grid", inGrid);
+
+    $("empty").hidden = n > 0;
+    state.peers = [...tiles.values()].map((t) => t.name);
     sendRects();
   }
 
-  function update(tile) {
-    const p = audioPeers.find((x) => x.id === tile.name);
-    const track = videoByName.get(tile.name) || null;
+  function update(tile, isAudio, track) {
+    const p = isAudio ? audioPeers.find((x) => x.id === tile.name) : null;
     if (tile.track !== track) {
       if (tile.track) tile.track.detach(tile.video);
       tile.track = track;
@@ -225,9 +262,10 @@
   let lastRects = "";
   function sendRects() {
     const W = window.innerWidth || 1, H = window.innerHeight || 1, rects = {};
-    for (const [n, tile] of tiles) {
+    for (const [k, tile] of tiles) {
+      if (!k.startsWith("a:")) continue;  // the app only needs tiles it has audio options for
       const r = tile.el.getBoundingClientRect();
-      rects[n] = [r.left / W, r.top / H, r.width / W, r.height / H].map((v) => Math.round(v * 10000) / 10000);
+      rects[tile.name] = [r.left / W, r.top / H, r.width / W, r.height / H].map((v) => Math.round(v * 10000) / 10000);
     }
     const json = JSON.stringify(rects);
     if (json !== lastRects) { lastRects = json; send({ t: "rects", rects }); }
@@ -252,8 +290,9 @@
     const n = Math.max(1, Math.min(9, +(params.get("people") || 2)));
     const names = ["Ms. Rivera", "Sam", "Alex", "Jordan", "Priya", "Lee", "Noor", "Kim", "Tomas"];
     audioPeers = names.slice(0, n).map((id, i) => ({ id, gain: 1, pan: 0, stereo: false, muted: i === 2, connected: true, level: i === 0 ? 0.6 : 0.1 }));
+    $("self").hidden = false;
     render();
-    if (params.get("hover")) { const t = tiles.get(names[0]); if (t) t.el.classList.add("dragging"); }
+    if (params.get("hover")) { const t = tiles.get("a:" + names[0]); if (t) t.el.classList.add("dragging"); }
     return;
   }
 
@@ -273,15 +312,15 @@
   });
 
   function collectVideo() {
-    const next = new Map();
+    const next = [];
     room.remoteParticipants.forEach((p) => {
       p.trackPublications.forEach((pub) => {
-        if (pub.kind === "video" && pub.track && !pub.isMuted && pub.source === LK.Track.Source.Camera && p.name)
-          next.set(p.name, pub.track);
+        if (pub.kind === "video" && pub.track && !pub.isMuted && pub.source === LK.Track.Source.Camera)
+          next.push({ identity: p.identity, name: p.name || "Guest", track: pub.track });
       });
     });
-    videoByName = next;
-    state.videoNames = [...next.keys()];
+    videos = next;
+    state.videoNames = next.map((v) => v.name);
     render();
   }
 
@@ -312,7 +351,7 @@
 
   setStatus("Connecting video…");
   room.connect(sfuUrl, token)
-    .then(async () => { state.phase = "connected"; setStatus(""); collectVideo(); await startCamera(); })
+    .then(async () => { state.phase = "connected"; state.myIdentity = room.localParticipant.identity; setStatus(""); collectVideo(); await startCamera(); })
     .catch(() => { state.phase = "error"; setStatus("Video couldn't connect. Your lesson audio still works."); });
   window.addEventListener("pagehide", () => room.disconnect());
 })();
