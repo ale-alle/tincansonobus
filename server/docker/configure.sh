@@ -22,6 +22,9 @@ get_env() { sed -n "s/^$1=\([^ #]*\).*/\1/p" .env | tail -n 1; }
 [ -n "$(get_env LIVEKIT_API_KEY)" ] || set_env LIVEKIT_API_KEY "API$(openssl rand -hex 6)"
 [ -n "$(get_env LIVEKIT_API_SECRET)" ] || set_env LIVEKIT_API_SECRET "$(openssl rand -hex 32)"
 [ -n "$(get_env MOCK_ROOM_SEED)" ] || set_env MOCK_ROOM_SEED "$(openssl rand -hex 24)"
+# T-048: shared with the rooms-worker (wrangler secret RELAY_GROUP_SECRET); only groups signed with it
+# are created. Copy it from .env into the Worker; never commit it.
+[ -n "$(get_env GROUP_SECRET)" ] || set_env GROUP_SECRET "$(openssl rand -hex 32)"
 
 RTC_DOMAIN=$(get_env RTC_DOMAIN)
 TURN_DOMAIN=$(get_env TURN_DOMAIN)

@@ -22,6 +22,7 @@ struct RelayLimits {
     int64_t bytesPerSecond = 625000; // 5 Mbit/s per sender, above uncompressed stereo audio
     int64_t burstBytes = 125000;
     double rememberAddressSeconds = 3.0; // a router's port change is accepted after this much silence
+    int maxPerGroup = 6;                 // T-048: teacher + learner + a few extra devices, never the whole port range
 };
 
 struct RelayStats {
@@ -33,7 +34,9 @@ struct RelayStats {
 
 class Relay final : public aoo::net::relay_hook {
 public:
-    Relay(std::string publicIp, RelayLimits limits);
+    // groupSecret: only groups signed with it are created (group_auth.hpp); empty allows any name
+    // (local tests only, main.cpp requires --allow-unsigned-groups for that)
+    Relay(std::string publicIp, RelayLimits limits, std::string groupSecret);
     ~Relay() override;
 
     bool start();
@@ -47,6 +50,8 @@ public:
     void remove_participant(const std::string & group, const std::string & user) override;
     bool relay_address(const std::string & group, const std::string & user,
                        std::string & host, int & port) override;
+    bool allow_new_group(const std::string & group, std::string & why) override;
+    int max_users_per_group() const override { return limits_.maxPerGroup; }
 
 private:
     struct Participant {
@@ -75,6 +80,7 @@ private:
 
     const std::string publicIp_;
     const RelayLimits limits_;
+    const std::string groupSecret_;
 
     mutable std::mutex lock_;
     std::map<std::string, std::vector<ParticipantPtr>> rooms_;

@@ -47,6 +47,7 @@ jobs:
           set -e
           cat err.txt
           [ "$code" = 2 ] && grep -q -- "--relay-ip is required" err.txt
+          docker run --rm "$IMAGE:${{ github.sha }}" --self-test
       - name: Publish (same build, from the cache)
         uses: docker/build-push-action@v6
         with:

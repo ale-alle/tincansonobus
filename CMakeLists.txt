@@ -719,7 +719,7 @@ sono_add_custom_plugin_target(SonoBusInst "SonoBusInstrument" "VST3" TRUE  "IBus
 # Tin Can unit tests (no JUCE): cmake --build build --target TinCanTests --config Release
 # Connection server + lesson audio relay (doc/TINCAN-RELAY.md); the VPS builds it with server/relay/build.sh
 add_executable(CanDuetServer EXCLUDE_FROM_ALL
-    server/relay/main.cpp server/relay/relay.cpp
+    server/relay/main.cpp server/relay/relay.cpp server/relay/group_auth.cpp
     deps/aoo/lib/src/server.cpp deps/aoo/lib/src/client.cpp deps/aoo/lib/src/net_utils.cpp deps/aoo/lib/src/common.cpp deps/aoo/lib/src/codec_pcm.cpp deps/aoo/lib/src/time.cpp deps/aoo/lib/src/sync.cpp
     deps/aoo/deps/md5/md5.c
     deps/aoo/deps/oscpack/osc/OscOutboundPacketStream.cpp deps/aoo/deps/oscpack/osc/OscReceivedElements.cpp deps/aoo/deps/oscpack/osc/OscTypes.cpp)

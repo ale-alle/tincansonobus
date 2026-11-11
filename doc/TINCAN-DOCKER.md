@@ -35,8 +35,9 @@ port publishing would add a proxy hop per packet. This replaces `server/vps/vult
    `scripts/tincan-mock-redeem.py` → `test-api/redeem.py` and `video-page/index.html` → `test-api/index.html`).
 3. `cp env.example .env`, set the two domain names and `CANDUET_SERVER_IMAGE` (a `:<commit>` tag CI
    published from `main`), and `TEST_API=1` + `MOCK_TICKETS` for testing.
-4. `bash configure.sh` — fills the public IP and LiveKit secret into `.env`, writes `generated/`,
-   opens the firewall.
+4. `bash configure.sh` — fills the public IP, LiveKit secret and lesson-group secret (`GROUP_SECRET`)
+   into `.env`, writes `generated/`, opens the firewall. Copy `GROUP_SECRET` into the rooms-worker:
+   `wrangler secret put RELAY_GROUP_SECRET` (T-048: the server only creates groups it signed).
 5. Point the DNS records at the server, then `docker compose up -d`
    (`docker compose --profile test-api up -d` with the test join service).
 6. Check: `docker compose ps` (all Up), `curl https://<rtc domain>` → `OK`,

@@ -330,6 +330,9 @@ std::shared_ptr<user> server::find_user(const std::string& name)
     return nullptr;
 }
 
+static relay_hook *g_relay_hook = nullptr;
+void set_relay_hook(relay_hook *hook) { g_relay_hook = hook; }
+
 std::shared_ptr<group> server::get_group(const std::string& name,
                                          const std::string& pwd,
                                          bool is_public,
@@ -350,13 +353,15 @@ std::shared_ptr<group> server::get_group(const std::string& name,
             return nullptr;
         }
     } else {
-        // create new group (LATER add option to disallow this)
-        if (true){
+        // create new group; Tin Can: the relay server only creates signed lesson groups (T-048)
+        std::string why;
+        if (!g_relay_hook || g_relay_hook->allow_new_group(name, why)){
             grp = std::make_shared<group>(name, pwd, is_public);
             groups_.push_back(grp);
             e = error::none;
             return grp;
         } else {
+            LOG_WARNING("aoo_server: refused group: " << why);
             e = error::permission_denied;
             return nullptr;
         }
@@ -395,8 +400,6 @@ void server::on_user_left(user &usr){
     push_event(std::move(e));
 }
 
-static relay_hook *g_relay_hook = nullptr;
-void set_relay_hook(relay_hook *hook) { g_relay_hook = hook; }
 
 void server::on_user_joined_group(user& usr, group& grp){
     if (g_relay_hook && !g_relay_hook->add_participant(grp.name, usr.name, usr.endpoint->connection_address(), usr.endpoint->public_address)) {
@@ -1241,7 +1244,10 @@ void client_endpoint::handle_group_join(const osc::ReceivedMessage& msg)
     server::error err;
     if (user_){
         auto grp = server_->get_group(name, password, is_public, err);
-        if (grp){
+        const int most = g_relay_hook ? g_relay_hook->max_users_per_group() : 0;
+        if (grp && most > 0 && grp->num_users() >= most) {
+            errmsg = "the lesson is full";
+        } else if (grp){
             if (user_->add_group(grp)){
                 grp->add_user(user_);
                 server_->on_user_joined_group(*user_, *grp);

@@ -40,6 +40,21 @@ def room_bytes(label, n):
     return hmac.new(ROOM_SEED.encode(), label.encode(), hashlib.sha256).digest()[:n]
 
 
+GROUP_SECRET = os.environ.get("MOCK_GROUP_SECRET", "")
+
+
+def signed_group(room):
+    """With MOCK_GROUP_SECRET, sign the group as the rooms-worker does (server/relay/group_auth.hpp),
+    so a canduet-server that only accepts lesson groups lets testers in. The expiry is the end of
+    tomorrow (UTC), the same for every redeem that day, so both PCs land in the same group."""
+    if not GROUP_SECRET:
+        return room
+    expires = (int(time.time()) // 86400 + 2) * 86400
+    body = f"{room}.{expires}"
+    mac = hmac.new(GROUP_SECRET.encode(), body.encode(), hashlib.sha256).digest()[:16]
+    return body + "." + base64.urlsafe_b64encode(mac).decode().rstrip("=")
+
+
 ROOM = {
     "server": os.environ.get("MOCK_SERVER", "localhost:10999"),
     "group": "lesson-" + room_bytes("group", 8).hex(),
@@ -104,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(400, {"error": "bad_request"})
         if isinstance(ticket, str) and ticket in TICKETS:
             name = TICKETS[ticket]
-            body = dict(ROOM, userName=name)
+            body = dict(ROOM, userName=name, group=signed_group(ROOM["group"]))
             if VIDEO_URL:
                 # a new identity per redeem so two app instances are two participants
                 body["video"] = {"url": VIDEO_URL, "token": video_token("p-" + secrets.token_hex(6), name)}

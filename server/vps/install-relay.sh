@@ -17,7 +17,7 @@ trap 'rm -rf "$BUILD"' EXIT
 A="$SRC/deps/aoo/lib/src"
 OSC="$SRC/deps/aoo/deps/oscpack/osc"
 FLAGS="-std=c++17 -O2 -pthread -DAOO_STATIC -I$SRC/deps/aoo/lib -I$A -I$SRC/deps/aoo/deps -I$SRC/server/relay"
-for f in "$SRC/server/relay/main.cpp" "$SRC/server/relay/relay.cpp" "$A/server.cpp" "$A/client.cpp" \
+for f in "$SRC/server/relay/main.cpp" "$SRC/server/relay/relay.cpp" "$SRC/server/relay/group_auth.cpp" "$A/server.cpp" "$A/client.cpp" \
          "$A/net_utils.cpp" "$A/common.cpp" "$A/codec_pcm.cpp" "$A/time.cpp" "$A/sync.cpp" \
          "$OSC/OscOutboundPacketStream.cpp" "$OSC/OscReceivedElements.cpp" "$OSC/OscTypes.cpp"; do
     g++ $FLAGS -c "$f" -o "$BUILD/$(basename "$f").o" &
@@ -27,6 +27,12 @@ gcc -O2 -c "$SRC/deps/aoo/deps/md5/md5.c" -o "$BUILD/md5.o"
 g++ -pthread "$BUILD"/*.o -o "$BUILD/canduet-server"
 
 install -m 755 "$BUILD/canduet-server" /usr/local/bin/canduet-server
+/usr/local/bin/canduet-server --self-test
+
+# T-048: only lesson groups signed with this secret are created; the rooms-worker gets the same value
+# (wrangler secret put RELAY_GROUP_SECRET). Kept across reinstalls.
+install -d -m 755 /etc/canduet
+[ -s /etc/canduet/group-secret ] || (umask 077; openssl rand -hex 32 > /etc/canduet/group-secret)
 
 cat > /etc/systemd/system/canduet-server.service <<EOF
 [Unit]
@@ -35,7 +41,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/canduet-server --relay-ip $RELAY_IP --port $PORT --relay-ports ${RELAY_PORTS/:/-}
+ExecStart=/usr/local/bin/canduet-server --relay-ip $RELAY_IP --port $PORT --relay-ports ${RELAY_PORTS/:/-} --group-secret-file %d/group-secret
+LoadCredential=group-secret:/etc/canduet/group-secret
+LimitNOFILE=8192
 DynamicUser=yes
 Restart=always
 RestartSec=2

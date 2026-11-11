@@ -9,6 +9,8 @@ services:
     pull_policy: missing
     command: ["--relay-ip", "${PUBLIC_IP:?run configure.sh}", "--port", "${AOO_PORT:-10998}",
               "--relay-ports", "${RELAY_PORT_FIRST:-40000}-${RELAY_PORT_LAST:-40999}"]
+    environment:
+      CANDUET_GROUP_SECRET: ${GROUP_SECRET:?run configure.sh}   # only rooms-worker-signed lesson groups (T-048)
     network_mode: host
     restart: unless-stopped
     ulimits:
@@ -57,3 +59,4 @@ services:
       MOCK_VIDEO_TTL: "86400"
       MOCK_VIDEO_PAGE: /app/index.html
       MOCK_ROOM_SEED: ${MOCK_ROOM_SEED}
+      MOCK_GROUP_SECRET: ${GROUP_SECRET}

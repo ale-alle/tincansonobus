@@ -1,4 +1,5 @@
 #include "relay.hpp"
+#include "group_auth.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -44,9 +45,20 @@ void readAddress(const aoo::net::ip_address & in, uint32_t & ip, uint16_t & port
 
 } // namespace
 
-Relay::Relay(std::string publicIp, RelayLimits limits)
-    : publicIp_(std::move(publicIp)), limits_(limits), nextPort_(limits.firstPort)
+Relay::Relay(std::string publicIp, RelayLimits limits, std::string groupSecret)
+    : publicIp_(std::move(publicIp)), limits_(limits), groupSecret_(std::move(groupSecret)),
+      nextPort_(limits.firstPort)
 {
+}
+
+bool Relay::allow_new_group(const std::string & group, std::string & why)
+{
+    if (groupSecret_.empty()) return true;
+    const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const auto result = checkSignedGroup(group, groupSecret_, (int64_t) now);
+    why = groupCheckText(result);  // never the group name itself
+    return result == GroupCheck::ok;
 }
 
 Relay::~Relay()

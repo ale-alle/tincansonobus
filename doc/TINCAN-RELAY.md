@@ -50,7 +50,17 @@ Because the server decides what address gets shared, a modified or old app can't
 - **No open forwarding:** it forwards only between participants of a current lesson, and only from the IP the connection server saw at login.
 - **Abuse limits:** a bandwidth cap per port, and no reply larger than the packet that triggered it, so it can't be used to amplify attacks.
 - **No storage:** no audio or packet contents are stored, and logs hold no addresses by default.
-- **Known gap:** group names and password hashes reach the server unencrypted, and joining isn't tied to the lesson ticket. Real lessons should only allocate relay ports for rooms the app server created (T-021 or a server-to-server call).
+- **Signed lesson groups (T-048, 2026-11-11):** the server only creates a group whose name the
+  rooms-worker signed: `<room>.<expires>.<signature>`, signature = first 16 bytes of
+  HMAC-SHA256(secret, `<room>.<expires>`) in base64url, expiry = lesson end + 15 min (at most 3 days
+  ahead). Made-up, wrongly signed or expired groups get "permission denied"; the log names only the
+  reason, never the group. At most 6 people per lesson (`--max-per-group`), so one lesson can't use up
+  the port range. The secret is `GROUP_SECRET` in the server's `.env` (Docker) or
+  `/etc/canduet/group-secret` (install-relay.sh), and `RELAY_GROUP_SECRET` in the rooms-worker. The
+  app's own built-in server is unchanged. Checks: `canduet-server --self-test` (RFC 4231 vectors +
+  group format) and `tests/relay_test.py` (23 checks).
+- **Remaining gap:** group names and password hashes still reach the server unencrypted (TCP without
+  TLS); someone who can read that traffic could join a lesson's group until it expires.
 
 ## Latency
 | Item | Figure | Status |

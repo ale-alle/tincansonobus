@@ -3,7 +3,10 @@
 
     python tests/relay_test.py <path to canduet-server>
 """
+import base64
 import hashlib
+import hmac
+import os
 import select
 import socket
 import statistics
@@ -16,6 +19,8 @@ SERVER_PORT = 11998
 FIRST_RELAY_PORT = 41000
 FAKE_PUBLIC = "203.0.113.7"
 FAKE_LOCAL = "198.51.100.8"
+SECRET = "relay-test-secret-0123456789abcdef0123456789"
+MAX_PER_GROUP = 3
 failures = []
 
 
@@ -76,6 +81,21 @@ def md5(text):
     return hashlib.md5(text.encode()).hexdigest().upper()
 
 
+def signed(room, expires=None, secret=SECRET):
+    """A lesson group name as the rooms-worker makes it (server/relay/group_auth.hpp)."""
+    expires = int(time.time()) + 3600 if expires is None else expires
+    body = f"{room}.{expires}"
+    mac = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()[:16]
+    return body + "." + base64.urlsafe_b64encode(mac).decode().rstrip("=")
+
+
+def join_reply(client):
+    for address, args in client.messages:
+        if address == "/aoo/client/group/join":
+            return args
+    return None
+
+
 class Client:
     def __init__(self, name, group):
         self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -126,15 +146,36 @@ def wait_for_server():
 
 
 def main():
+    env = dict(os.environ, CANDUET_GROUP_SECRET=SECRET)
     server = subprocess.Popen([sys.argv[1], "--relay-ip", "127.0.0.1", "--port", str(SERVER_PORT),
-                               "--relay-ports", f"{FIRST_RELAY_PORT}-{FIRST_RELAY_PORT + 99}"])
+                               "--relay-ports", f"{FIRST_RELAY_PORT}-{FIRST_RELAY_PORT + 99}",
+                               "--max-per-group", str(MAX_PER_GROUP)], env=env)
     try:
         check("server starts", wait_for_server())
         time.sleep(0.2)
 
-        a = Client("A", "room1")
+        room1, room2 = signed("lesson-room1"), signed("lesson-room2")
+
+        # T-048: only lesson groups signed by the rooms-worker are created
+        refused = {
+            "a made-up group": "room1",
+            "a wrong signature": signed("lesson-room1", secret="not-the-secret-0123456789abcdef"),
+            "an expired lesson": signed("lesson-room1", int(time.time()) - 60),
+            "a lesson too far ahead": signed("lesson-room1", int(time.time()) + 30 * 24 * 3600),
+        }
+        for label, name in refused.items():
+            intruder = Client("X", name)
+            for _ in range(4):
+                if join_reply(intruder):
+                    break
+                intruder.read_tcp(0.5)
+            reply = join_reply(intruder)
+            check(f"{label} is refused", reply is not None and reply[1] == 0, repr(reply))
+            intruder.close()
+
+        a = Client("A", room1)
         time.sleep(0.3)
-        b = Client("B", "room1")
+        b = Client("B", room1)
         for _ in range(4):
             a.read_tcp(0.3)
             b.read_tcp(0.3)
@@ -169,11 +210,26 @@ def main():
         stranger.sendto(b"intruder", ("127.0.0.1", port_of_a))
         check("a stranger reaches nobody", b.receive(0.3)[0] is None and a.receive(0.3)[0] is None)
 
-        other = Client("C", "room2")
+        other = Client("C", room2)
         other.read_tcp(0.3)
         other.send_to(port_of_b, b"other room")
         check("another room's member reaches nobody", b.receive(0.3)[0] is None)
         other.close()
+
+        # T-048: a lesson holds at most MAX_PER_GROUP people, so nobody can use up the port range
+        extra = [Client(f"E{i}", room1) for i in range(MAX_PER_GROUP - 1)]
+        for e in extra:
+            for _ in range(4):
+                if join_reply(e):
+                    break
+                e.read_tcp(0.5)
+        replies = [join_reply(e) for e in extra]
+        check("the lesson fills up to its limit", replies[0] is not None and replies[0][1] == 1, repr(replies[0]))
+        check("one more is turned away", replies[-1] is not None and replies[-1][1] == 0
+              and "full" in replies[-1][2], repr(replies[-1]))
+        for e in extra:
+            e.close()
+        time.sleep(0.3)
 
         loop_ms = []
         for i in range(200):
