@@ -56,6 +56,8 @@ VIDEO_TTL = int(os.environ.get("MOCK_VIDEO_TTL", "3600"))
 VIDEO_PAGE = os.environ.get("MOCK_VIDEO_PAGE", "")
 # ticket -> display name; without MOCK_TICKETS the one ticket is "demo-ok"
 TICKETS = dict(pair.strip().split("=", 1) for pair in os.environ.get("MOCK_TICKETS", "").split(",") if pair.strip())
+if os.environ.get("MOCK_REQUIRE_TICKETS") == "1" and not TICKETS:
+    raise SystemExit("MOCK_TICKETS is empty; on a shared server the public demo ticket is not allowed")
 if not TICKETS:
     TICKETS = {"demo-ok": ROOM["userName"]}
 

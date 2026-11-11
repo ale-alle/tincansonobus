@@ -15,6 +15,8 @@ set_env() {
 # Read KEY from .env (value up to the first space or #)
 get_env() { sed -n "s/^$1=\([^ #]*\).*/\1/p" .env | tail -n 1; }
 
+# The address on the outgoing interface (right on Vultr). Behind NAT this is a private address:
+# set PUBLIC_IP in .env by hand there.
 [ -n "$(get_env PUBLIC_IP)" ] || set_env PUBLIC_IP \
     "$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')"
 [ -n "$(get_env LIVEKIT_API_KEY)" ] || set_env LIVEKIT_API_KEY "API$(openssl rand -hex 6)"

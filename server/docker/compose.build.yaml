@@ -1,0 +1,8 @@
+# Build canduet-server on this machine instead of pulling it (needs the whole repo checked out,
+# run from server/docker): docker compose -f compose.yaml -f compose.build.yaml build canduet-server
+services:
+  canduet-server:
+    pull_policy: build
+    build:
+      context: ../..
+      dockerfile: server/docker/Dockerfile

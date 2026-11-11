@@ -3,10 +3,10 @@
 # Every service uses host networking: media needs wide UDP port ranges and the real public address.
 services:
   canduet-server:
-    image: ${CANDUET_SERVER_IMAGE:-ghcr.io/ale-alle/canduet-server:main}
-    build:
-      context: ../..
-      dockerfile: server/docker/Dockerfile
+    # Pinned to a commit tag in .env, never :main, so a server only changes when .env does.
+    # Building here instead needs a full repo checkout: compose.build.yaml.
+    image: ${CANDUET_SERVER_IMAGE:?set CANDUET_SERVER_IMAGE in .env (a :<commit> tag)}
+    pull_policy: missing
     command: ["--relay-ip", "${PUBLIC_IP:?run configure.sh}", "--port", "${AOO_PORT:-10998}",
               "--relay-ports", "${RELAY_PORT_FIRST:-40000}-${RELAY_PORT_LAST:-40999}"]
     network_mode: host
@@ -48,7 +48,8 @@ services:
       - ./test-api:/app:ro
     environment:
       MOCK_PORT: "8788"
-      MOCK_TICKETS: ${MOCK_TICKETS:?set MOCK_TICKETS in .env}
+      MOCK_TICKETS: ${MOCK_TICKETS:-}
+      MOCK_REQUIRE_TICKETS: "1"         # redeem.py refuses to start without tickets
       MOCK_SERVER: ${RTC_DOMAIN}:${AOO_PORT:-10998}
       MOCK_VIDEO_URL: wss://${RTC_DOMAIN}
       MOCK_VIDEO_KEY: ${LIVEKIT_API_KEY}
