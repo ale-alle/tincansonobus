@@ -173,6 +173,24 @@ def main():
             check(f"{label} is refused", reply is not None and reply[1] == 0, repr(reply))
             intruder.close()
 
+        # an ended lesson takes no new joins, even while someone is still in it
+        ending = signed("lesson-ending", int(time.time()) + 2)
+        stayer = Client("S", ending)
+        for _ in range(4):
+            if join_reply(stayer):
+                break
+            stayer.read_tcp(0.5)
+        check("a lesson can be joined before it ends", (join_reply(stayer) or [0, 0])[1] == 1, repr(join_reply(stayer)))
+        time.sleep(3)
+        late = Client("L", ending)
+        for _ in range(4):
+            if join_reply(late):
+                break
+            late.read_tcp(0.5)
+        check("nobody new gets in after it ends", (join_reply(late) or [0, 1])[1] == 0, repr(join_reply(late)))
+        late.close()
+        stayer.close()
+
         a = Client("A", room1)
         time.sleep(0.3)
         b = Client("B", room1)

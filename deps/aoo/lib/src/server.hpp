@@ -32,8 +32,9 @@ struct relay_hook {
                                  const ip_address& connection_addr, const ip_address& claimed_public_addr) = 0;
     virtual void remove_participant(const std::string& group, const std::string& user) = 0;
     virtual bool relay_address(const std::string& group, const std::string& user, std::string& host, int& port) = 0;
-    // T-048: may this group be created (signed lesson groups only)? why: reason for the log
-    virtual bool allow_new_group(const std::string& group, std::string& why) { return true; }
+    // T-048: may anyone create or join this group (signed, unexpired lesson groups only)?
+    // Asked on every join, so an expired lesson takes no new joins even while someone stays.
+    virtual bool allow_group(const std::string& group) { return true; }
     // T-048: most people in one group, 0 = no limit
     virtual int max_users_per_group() const { return 0; }
 };

@@ -51,14 +51,16 @@ Relay::Relay(std::string publicIp, RelayLimits limits, std::string groupSecret)
 {
 }
 
-bool Relay::allow_new_group(const std::string & group, std::string & why)
+bool Relay::allow_group(const std::string & group)
 {
     if (groupSecret_.empty()) return true;
     const auto now = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    const auto result = checkSignedGroup(group, groupSecret_, (int64_t) now);
-    why = groupCheckText(result);  // never the group name itself
-    return result == GroupCheck::ok;
+    if (checkSignedGroup(group, groupSecret_, (int64_t) now) == GroupCheck::ok) return true;
+    // counted, not logged per attempt: a script can't fill the disk; never the group name
+    std::lock_guard<std::mutex> guard(lock_);
+    ++stats_.refusedGroups;
+    return false;
 }
 
 Relay::~Relay()

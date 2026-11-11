@@ -39,7 +39,8 @@ port publishing would add a proxy hop per packet. This replaces `server/vps/vult
    into `.env`, writes `generated/`, opens the firewall. Copy `GROUP_SECRET` into the rooms-worker:
    `wrangler secret put RELAY_GROUP_SECRET` (T-048: the server only creates groups it signed).
 5. Point the DNS records at the server, then `docker compose up -d`
-   (`docker compose --profile test-api up -d` with the test join service).
+   (`docker compose --profile test-api up -d` with the test join service, **testing only**: it hands
+   out signed groups to anyone with a test ticket, so it stays off once real lessons run there).
 6. Check: `docker compose ps` (all Up), `curl https://<rtc domain>` → `OK`,
    `docker compose logs canduet-server` → "connection server on 10998".
 

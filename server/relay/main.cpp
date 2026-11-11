@@ -199,10 +199,12 @@ int main(int argc, char ** argv)
             lastStats = now;
             auto s = relay.stats();
             if (s.forwarded != previous.forwarded || s.droppedUnknownSender != previous.droppedUnknownSender
-                || s.droppedNoDestination != previous.droppedNoDestination || s.droppedRateLimit != previous.droppedRateLimit) {
-                std::printf("relay: forwarded %llu, dropped unknown %llu, no destination %llu, rate limit %llu\n",
+                || s.droppedNoDestination != previous.droppedNoDestination || s.droppedRateLimit != previous.droppedRateLimit
+                || s.refusedGroups != previous.refusedGroups) {
+                std::printf("relay: forwarded %llu, dropped unknown %llu, no destination %llu, rate limit %llu, refused groups %llu\n",
                             (unsigned long long) s.forwarded, (unsigned long long) s.droppedUnknownSender,
-                            (unsigned long long) s.droppedNoDestination, (unsigned long long) s.droppedRateLimit);
+                            (unsigned long long) s.droppedNoDestination, (unsigned long long) s.droppedRateLimit,
+                            (unsigned long long) s.refusedGroups);
                 std::fflush(stdout);
                 previous = s;
             }

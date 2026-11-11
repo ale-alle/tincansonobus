@@ -338,6 +338,13 @@ std::shared_ptr<group> server::get_group(const std::string& name,
                                          bool is_public,
                                          error& e)
 {
+    // Tin Can: the relay server only lets people into signed, unexpired lesson groups (T-048);
+    // refusals are counted by the hook, not logged one by one
+    if (g_relay_hook && !g_relay_hook->allow_group(name)) {
+        e = error::permission_denied;
+        return nullptr;
+    }
+
     auto grp = find_group(name);
     if (grp){
         // check password for existing group
@@ -353,15 +360,13 @@ std::shared_ptr<group> server::get_group(const std::string& name,
             return nullptr;
         }
     } else {
-        // create new group; Tin Can: the relay server only creates signed lesson groups (T-048)
-        std::string why;
-        if (!g_relay_hook || g_relay_hook->allow_new_group(name, why)){
+        // create new group (Tin Can: already checked above when the relay hook is set)
+        if (true){
             grp = std::make_shared<group>(name, pwd, is_public);
             groups_.push_back(grp);
             e = error::none;
             return grp;
         } else {
-            LOG_WARNING("aoo_server: refused group: " << why);
             e = error::permission_denied;
             return nullptr;
         }

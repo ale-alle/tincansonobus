@@ -13,6 +13,7 @@ services:
       CANDUET_GROUP_SECRET: ${GROUP_SECRET:?run configure.sh}   # only rooms-worker-signed lesson groups (T-048)
     network_mode: host
     restart: unless-stopped
+    logging: {options: {max-size: 10m, max-file: "3"}}   # the default json-file log never rotates
     ulimits:
       nofile: 8192                       # one socket per relayed participant (T-048)
     read_only: true
@@ -24,6 +25,7 @@ services:
     command: ["--config", "/etc/livekit.yaml"]
     network_mode: host
     restart: unless-stopped
+    logging: {options: {max-size: 10m, max-file: "3"}}   # the default json-file log never rotates
     volumes:
       - ./generated/livekit.yaml:/etc/livekit.yaml:ro
 
@@ -32,11 +34,14 @@ services:
     command: ["run", "--config", "/etc/caddy.yaml", "--adapter", "yaml"]
     network_mode: host
     restart: unless-stopped
+    logging: {options: {max-size: 10m, max-file: "3"}}   # the default json-file log never rotates
     volumes:
       - ./generated/caddy.yaml:/etc/caddy.yaml:ro
       - ./caddy_data:/data
 
   # Test join service (stand-in for the rooms-worker): `docker compose --profile test-api up -d`.
+  # It signs groups with the real GROUP_SECRET, so anyone with a test ticket gets into the day's test
+  # lesson: keep it OFF on a server that holds real lessons (TEST_API=0, no test-api profile).
   # Needs test-api/redeem.py (scripts/tincan-mock-redeem.py) and test-api/index.html (video-page).
   test-api:
     profiles: [test-api]
@@ -44,6 +49,7 @@ services:
     command: ["python", "-I", "/app/redeem.py"]
     network_mode: host
     restart: unless-stopped
+    logging: {options: {max-size: 10m, max-file: "3"}}   # the default json-file log never rotates
     read_only: true
     user: "65534:65534"
     volumes:

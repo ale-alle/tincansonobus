@@ -30,6 +30,7 @@ struct RelayStats {
     uint64_t droppedUnknownSender = 0;
     uint64_t droppedNoDestination = 0;
     uint64_t droppedRateLimit = 0;
+    uint64_t refusedGroups = 0;        // joins to unsigned, wrongly signed or expired groups (T-048)
 };
 
 class Relay final : public aoo::net::relay_hook {
@@ -50,7 +51,7 @@ public:
     void remove_participant(const std::string & group, const std::string & user) override;
     bool relay_address(const std::string & group, const std::string & user,
                        std::string & host, int & port) override;
-    bool allow_new_group(const std::string & group, std::string & why) override;
+    bool allow_group(const std::string & group) override;
     int max_users_per_group() const override { return limits_.maxPerGroup; }
 
 private:

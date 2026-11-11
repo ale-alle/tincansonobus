@@ -29,7 +29,7 @@ g++ -pthread "$BUILD"/*.o -o "$BUILD/canduet-server"
 install -m 755 "$BUILD/canduet-server" /usr/local/bin/canduet-server
 /usr/local/bin/canduet-server --self-test
 
-# T-048: only lesson groups signed with this secret are created; the rooms-worker gets the same value
+# T-048 (needs systemd 248+ for LoadCredential/%d: Ubuntu 22.04 or newer): only lesson groups signed with this secret are created; the rooms-worker gets the same value
 # (wrangler secret put RELAY_GROUP_SECRET). Kept across reinstalls.
 install -d -m 755 /etc/canduet
 [ -s /etc/canduet/group-secret ] || (umask 077; openssl rand -hex 32 > /etc/canduet/group-secret)
