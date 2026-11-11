@@ -1185,6 +1185,9 @@ private:
     CriticalSection  mRecentsLock;
     
     AooServerConnectionInfo mPendingReconnectInfo;
+    // Tin Can: the lesson joined last (memory only, never saved); a server drop rejoins this lesson,
+    // never an old saved group. Cleared when the person disconnects. Guarded by mRecentsLock.
+    AooServerConnectionInfo mLessonReconnectInfo;
     bool mPendingReconnect = false;
     bool mRecoveringFromServerLoss = false;
     

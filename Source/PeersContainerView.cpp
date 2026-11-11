@@ -860,7 +860,9 @@ void PeersContainerView::rebuildPeerViews()
 {
     int numpeers = processor.getNumberRemotePeers();
 
-    // views get reused for other people below, so hand any flipped one back first
+    // views get reused for other people below, so hand any flipped one back first, and open it
+    // again afterwards if that person is still here (any peer change rebuilds the views)
+    String reflip = mFlippedName;
     if (mFlipOverlay) setFlipped({});
     
     showSendOptions(0, false);
@@ -1014,6 +1016,14 @@ void PeersContainerView::rebuildPeerViews()
     updatePeerViews();
     updateLayout();
     resized();
+
+    // forget video identities of people who left, so the table never fills up in a long lesson
+    for (auto it = mPeerVideoIds.begin(); it != mPeerVideoIds.end(); ) {
+        if (findPeerIndexByName(it->first) < 0) it = mPeerVideoIds.erase(it);
+        else ++it;
+    }
+
+    if (reflip.isNotEmpty() && findPeerIndexByName(reflip) >= 0) setFlipped(reflip);
 }
 
 void PeersContainerView::updatePeerOrdering()
@@ -2740,7 +2750,6 @@ void PeersContainerView::positionFlipOverlay()
     // child windows are placed in the main window's client coordinates
     auto * top = getTopLevelComponent();
     auto bounds = top->getLocalArea(mVideoTiles.get(), tile);
-    if (mFlipOverlay->getBounds() != bounds) mFlipOverlay->setBounds(bounds);
-    mFlipOverlay->resized();
+    if (mFlipOverlay->getBounds() != bounds) mFlipOverlay->setBounds(bounds);  // lays it out when it changes
     if (!mFlipOverlay->isVisible()) mFlipOverlay->setVisible(true);
 }

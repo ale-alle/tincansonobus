@@ -88,8 +88,14 @@ String getApiBase()
 
 bool isLessonOnly()
 {
+#if TINCAN_ALLOW_DEV_CONNECT
+    // development builds only (CMake TINCAN_ALLOW_DEV_CONNECT=ON): TINCAN_DEV_CONNECT=1 brings back
+    // the old connect page; shipped builds ignore it
     static const bool lessonOnly = SystemStats::getEnvironmentVariable("TINCAN_DEV_CONNECT", {}) != "1";
     return lessonOnly;
+#else
+    return true;
+#endif
 }
 
 String getMyLessonsURL()

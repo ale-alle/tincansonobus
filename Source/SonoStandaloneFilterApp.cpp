@@ -498,6 +498,12 @@ public:
 
                         // apply command line connection stuff
 
+                        // Tin Can: lessons only come from canduet:// links; --server/--group are ignored
+                        if (TinCan::isLessonOnly()) {
+                            doInitialConnect = false;
+                            copyInfo = false;
+                        }
+
                         if (doInitialConnect) {
                             DBG("CONNECTING INITIAL");
                             sonoeditor->connectWithInfo(cmdlineConnInfo, false, false);
@@ -582,7 +588,7 @@ public:
                 }
 
 
-                if (doInitialConnect) {
+                if (doInitialConnect && !TinCan::isLessonOnly()) {
                     DBG("CONNECTING HEADLESS INITIAL");
                     sonoproc->setLessonKey(cmdlineConnInfo.lessonKey);
                     sonoproc->connectToServer(cmdlineConnInfo.serverHost, cmdlineConnInfo.serverPort, cmdlineConnInfo.userName, cmdlineConnInfo.userPassword);

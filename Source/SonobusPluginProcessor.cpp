@@ -1215,7 +1215,14 @@ bool SonobusAudioProcessor::disconnectFromServer()
     if (!mAooClient) return false;
  
     mAooClient->disconnect();
-    
+
+    {
+        const ScopedLock sl (mRecentsLock);
+        mLessonReconnectInfo = AooServerConnectionInfo();
+    }
+    mReconnectTimer.stopTimer();
+    mRecoveringFromServerLoss = false;
+
     // disconnect from everything else!
     removeAllRemotePeers();
 
@@ -1268,8 +1275,13 @@ bool SonobusAudioProcessor::setLessonKey(const String & base64Key)
 
 void SonobusAudioProcessor::addRecentServerConnectionInfo(const AooServerConnectionInfo & cinfo)
 {
-    // Tin Can: lesson rooms use one-time credentials that must never be stored
-    if (cinfo.lessonKey.isNotEmpty()) return;
+    // Tin Can: lesson rooms use one-time credentials that must never be stored; keep the
+    // current lesson in memory only, so a server drop can rejoin it
+    if (cinfo.lessonKey.isNotEmpty()) {
+        const ScopedLock sl (mRecentsLock);
+        mLessonReconnectInfo = cinfo;
+        return;
+    }
 
     const ScopedLock sl (mRecentsLock);
 
@@ -2806,6 +2818,20 @@ bool SonobusAudioProcessor::handleOtherMessage(EndpointState * endpoint, const c
             String targets (CharPointer_UTF8((it++)->AsString()));
             String tags (CharPointer_UTF8((it++)->AsString()));
             String message (CharPointer_UTF8((it++)->AsString()));
+
+            // Tin Can: the sender's name comes from the peer the packet arrived from, never from the
+            // message itself, so nobody can speak (or claim a video tile, or answer a recording
+            // request) as someone else. Control messages from an unknown peer are dropped.
+            {
+                const ScopedReadLock sl (mCoreLock);
+                RemotePeer * peer = findRemotePeer(endpoint, -1);
+                if (peer && peer->userName.isNotEmpty()) {
+                    from = peer->userName;
+                }
+                else if (TinCan::isRecordingTag(tags) || tags == TinCan::kVideoIdTag) {
+                    return false;
+                }
+            }
 
             SBChatEvent chatevent(SBChatEvent::UserType, group, from, targets, tags, message);
 
@@ -8991,6 +9017,25 @@ void SonobusAudioProcessor::ServerReconnectTimer::timerCallback()
 
 bool SonobusAudioProcessor::reconnectToMostRecent()
 {
+    if (TinCan::isLessonOnly()) {
+        // only the lesson we were in (its key is still set); never a saved non-lesson group
+        AooServerConnectionInfo info;
+        {
+            const ScopedLock sl (mRecentsLock);
+            info = mLessonReconnectInfo;
+        }
+        if (info.lessonKey.isEmpty() || info.serverHost.isEmpty() || info.userName.isEmpty()) {
+            mReconnectTimer.stopTimer();
+            mRecoveringFromServerLoss = false;
+            return false;
+        }
+        DBG("Rejoining the lesson after losing the server");
+        mPendingReconnectInfo = info;
+        mPendingReconnect = true;
+        connectToServer(info.serverHost, info.serverPort, info.userName, info.userPassword);
+        return true;
+    }
+
     Array<AooServerConnectionInfo> recents;
     getRecentServerConnectionInfos(recents);
     
