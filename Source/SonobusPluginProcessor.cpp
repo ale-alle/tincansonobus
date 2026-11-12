@@ -2828,7 +2828,7 @@ bool SonobusAudioProcessor::handleOtherMessage(EndpointState * endpoint, const c
                 if (peer && peer->userName.isNotEmpty()) {
                     from = peer->userName;
                 }
-                else if (TinCan::isRecordingTag(tags) || tags == TinCan::kVideoIdTag) {
+                else if (TinCan::isRecordingTag(tags) || tags == TinCan::kVideoIdTag || tags == TinCan::NoteWire::Tag) {
                     return false;
                 }
             }
@@ -2839,7 +2839,7 @@ bool SonobusAudioProcessor::handleOtherMessage(EndpointState * endpoint, const c
 
                 // Tin Can recording control messages (T-045) and video identities (video tiles) go to the
                 // editor, never into the chat
-                if (!TinCan::isRecordingTag(tags) && tags != TinCan::kVideoIdTag)
+                if (!TinCan::isRecordingTag(tags) && tags != TinCan::kVideoIdTag && tags != TinCan::NoteWire::Tag)
                     mAllChatEvents.add(chatevent);
                 clientListeners.call(&SonobusAudioProcessor::ClientListener::sbChatEventReceived, this, chatevent);
             }

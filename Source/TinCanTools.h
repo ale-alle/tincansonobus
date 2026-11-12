@@ -6,6 +6,7 @@
 #include "JuceHeader.h"
 #include "TinCanInstruments.h"
 #include "TinCanNotes.h"
+#include "TinCanNoteShare.h"
 #include "TinCanSummaries.h"
 
 #include <functional>
@@ -23,6 +24,7 @@ struct NoteColours
 {
     static Colour midi()  { return Colour(0xff47b0f8); }  // from the MIDI input
     static Colour local() { return Colour(0xfff0a030); }  // played with the mouse
+    static Colour remote() { return Colour(0xffff6b70); } // the other person's keys (T-074), the light string red
 
     // fill for a sounding note, or transparent if silent; sustained-only notes are paler
     static Colour forNote(const NoteState & state, int note);
@@ -94,18 +96,21 @@ private:
     int mouseNote = -1;
 };
 
-class InstrumentPanel : public Component, private Timer, private MidiKeyboardState::Listener,
-                        private ChangeListener
+class InstrumentPanel : public Component, private MidiKeyboardState::Listener,
+                        private ChangeListener, private NoteShare::Listener
 {
 public:
-    InstrumentPanel(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager);
+    InstrumentPanel(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
+                    NoteShare & noteShare);
     ~InstrumentPanel() override;
 
     void resized() override;
     void paint(Graphics & g) override;
 
 private:
-    void timerCallback() override;
+    void notesArrived(const std::vector<NoteEvent> & events) override;
+    void noteShareChanged() override;
+    void updateShareControls();
     void handleNoteOn(MidiKeyboardState *, int channel, int note, float velocity) override;
     void handleNoteOff(MidiKeyboardState *, int channel, int note, float velocity) override;
     void changeListenerCallback(ChangeBroadcaster *) override;  // MIDI inputs turned on/off
@@ -123,6 +128,7 @@ private:
 
     SonobusAudioProcessor & processor;
     std::function<AudioDeviceManager*()> getDeviceManager;
+    NoteShare & noteShare;
 
     NoteState notes;
     MidiKeyboardState mouseState;
@@ -141,8 +147,11 @@ private:
     ComboBox transposeChoice;
     ComboBox middleCChoice;
     ToggleButton namesToggle { TRANS("All note names") }, flatsToggle { TRANS("Flats") };
+    // T-074: send my keys to the lesson; show the others' keys
+    ToggleButton shareToggle { TRANS("Share my keys") }, showToggle { TRANS("Show the other person's keys") };
     Label midiStatus;
     Label lastNoteLabel;
+    Label chordLabel;   // the chord of the held keys, and the other person's when they share
     juce::Rectangle<int> legendArea;
 
     int instrumentIndex = 0;
@@ -161,7 +170,7 @@ class ToolsPanel : public Component
 {
 public:
     ToolsPanel(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-               std::function<void()> openWorkspace, SummaryHooks summaryHooks);
+               NoteShare & noteShare, std::function<void()> openWorkspace, SummaryHooks summaryHooks);
     ~ToolsPanel() override;
 
     void resized() override;
@@ -181,7 +190,8 @@ class ToolsWindow : public DocumentWindow
 {
 public:
     ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                std::function<void()> openWorkspace, SummaryHooks summaryHooks, std::function<void()> onClose);
+                NoteShare & noteShare, std::function<void()> openWorkspace, SummaryHooks summaryHooks,
+                std::function<void()> onClose);
     ~ToolsWindow() override;
 
     void closeButtonPressed() override;

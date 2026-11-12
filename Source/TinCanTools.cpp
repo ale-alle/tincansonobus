@@ -3,6 +3,7 @@
 
 #include "TinCanTools.h"
 #include "TinCanTheme.h"
+#include "TinCanChords.h"
 #include "TinCanPracticeTools.h"
 #include "SonobusPluginProcessor.h"
 
@@ -13,6 +14,7 @@ Colour NoteColours::forNote(const NoteState & state, int note)
     Colour c;
     if (state.isSounding(note, NoteSource::Midi)) c = midi();
     else if (state.isSounding(note, NoteSource::Local)) c = local();
+    else if (state.isSounding(note, NoteSource::Remote)) c = remote();
     else return Colours::transparentBlack;
     return state.isSustainedOnly(note) ? c.withAlpha(0.45f) : c;
 }
@@ -69,6 +71,12 @@ void KeyboardView::drawWhiteNote(int note, Graphics & g, juce::Rectangle<float> 
         if (notes.isSounding(note, NoteSource::Midi) && notes.isSounding(note, NoteSource::Local)) {
             g.setColour(NoteColours::local());
             g.fillRect(area.withTop(area.getBottom() - area.getHeight() * 0.25f));
+        }
+        // the other person on the same key as me: their colour along the top
+        bool mine = notes.isSounding(note, NoteSource::Midi) || notes.isSounding(note, NoteSource::Local);
+        if (mine && notes.isSounding(note, NoteSource::Remote)) {
+            g.setColour(NoteColours::remote());
+            g.fillRect(area.withHeight(area.getHeight() * 0.25f));
         }
     }
     MidiKeyboardComponent::drawWhiteNote(note, g, area, false, isOver, lineColour,
@@ -266,8 +274,9 @@ static const RangePreset rangePresets[] = {
 
 static constexpr int customTuningId = 1000;
 
-InstrumentPanel::InstrumentPanel(SonobusAudioProcessor & proc, std::function<AudioDeviceManager*()> getDM)
-    : processor(proc), getDeviceManager(std::move(getDM)), keyboard(mouseState, notes), fretboard(notes)
+InstrumentPanel::InstrumentPanel(SonobusAudioProcessor & proc, std::function<AudioDeviceManager*()> getDM,
+                                 NoteShare & share)
+    : processor(proc), getDeviceManager(std::move(getDM)), noteShare(share), keyboard(mouseState, notes), fretboard(notes)
 {
     addAndMakeVisible(keyboard);
     addChildComponent(fretboard);
@@ -334,9 +343,22 @@ InstrumentPanel::InstrumentPanel(SonobusAudioProcessor & proc, std::function<Aud
     middleCChoice.onChange = [this]() { updateNaming(); };
     addAndMakeVisible(middleCChoice);
 
+    shareToggle.setTooltip(TRANS("Light up your keys on the others' screens while you play. They hear you as usual; this only shows which keys."));
+    shareToggle.onClick = [this]() { noteShare.setSharing(shareToggle.getToggleState()); updateShareControls(); };
+    addAndMakeVisible(shareToggle);
+    showToggle.setTooltip(TRANS("Show the keys someone in the lesson is sharing, in their own colour"));
+    showToggle.onClick = [this]() { noteShare.setShowingRemote(showToggle.getToggleState()); };
+    addAndMakeVisible(showToggle);
+
     midiStatus.setFont(Font(13.0f));
     midiStatus.setColour(Label::textColourId, Colour(0xccffffff));
     addAndMakeVisible(midiStatus);
+
+    chordLabel.setFont(Font(18.0f, Font::bold));
+    chordLabel.setColour(Label::textColourId, Colours::white);
+    chordLabel.setJustificationType(Justification::centredRight);
+    chordLabel.setTitle(TRANS("Chord"));
+    addAndMakeVisible(chordLabel);
 
     lastNoteLabel.setFont(Font(15.0f, Font::bold));
     lastNoteLabel.setColour(Label::textColourId, Colours::white);
@@ -348,27 +370,31 @@ InstrumentPanel::InstrumentPanel(SonobusAudioProcessor & proc, std::function<Aud
     instrumentChoice.setSelectedId(1, dontSendNotification);
     selectInstrument(0);
 
-    // development aid: TINCAN_DEMO_NOTES="C4 E4 G4" shows those notes as held on the MIDI input
-    for (int note : parseTuning(SystemStats::getEnvironmentVariable("TINCAN_DEMO_NOTES", {}).toStdString())) {
+    // MIDI input and the others' keys arrive through the note share (T-074)
+    noteShare.addListener(this);
+
+    // development aid: TINCAN_DEMO_NOTES="C4 E4 G4" shows those notes as held on the MIDI input, and
+    // shares them when in a lesson, so two copies on one PC can test sharing keys (T-074). After
+    // addListener: starting the MIDI tap forgets MIDI notes from before.
+    auto demoNotes = parseTuning(SystemStats::getEnvironmentVariable("TINCAN_DEMO_NOTES", {}).toStdString());
+    if (!demoNotes.empty()) noteShare.setSharing(true);
+    for (int note : demoNotes) {
         NoteEvent ev;
         ev.type = NoteEvent::NoteOn;
         ev.note = (uint8_t) note;
         ev.value = 100;
         notes.apply(ev);
+        noteShare.playLocal(ev);   // shared like real playing
         lastNote = note;
     }
     notesChanged();
 
-    // drop anything left from an earlier session, then start copying MIDI
-    NoteEvent stale;
-    while (processor.popNoteEvent(stale)) {}
-    processor.setNoteTapEnabled(true);
-    startTimerHz(30);
+    updateShareControls();
 }
 
 InstrumentPanel::~InstrumentPanel()
 {
-    processor.setNoteTapEnabled(false);
+    noteShare.removeListener(this);
     if (auto * dm = getDeviceManager ? getDeviceManager() : nullptr) dm->removeChangeListener(this);
     mouseState.removeListener(this);
 }
@@ -452,6 +478,7 @@ void InstrumentPanel::paint(Graphics & g)
     const Item items[] = {
         { NoteColours::midi(), TRANS("MIDI input") },
         { NoteColours::local(), TRANS("Mouse") },
+        { NoteColours::remote(), noteShare.getRemoteName().isNotEmpty() ? noteShare.getRemoteName() : TRANS("Shared keys") },
         { NoteColours::midi().withAlpha(0.45f), TRANS("Held by pedal") },
     };
     Font font(12.0f);
@@ -488,6 +515,8 @@ void InstrumentPanel::resized()
         octaveUp.setBounds(row.removeFromLeft(28));
     }
     lastNoteLabel.setBounds(row.removeFromRight(240));
+    row.removeFromRight(12);
+    chordLabel.setBounds(row.removeFromRight(jmin(320, jmax(0, row.getWidth()))));
 
     r.removeFromTop(6);
     row = r.removeFromTop(26);
@@ -500,7 +529,11 @@ void InstrumentPanel::resized()
 
     r.removeFromTop(6);
     auto status = r.removeFromBottom(22);
-    legendArea = status.removeFromRight(280);
+    legendArea = status.removeFromRight(360);
+    showToggle.setBounds(status.removeFromRight(jmin(250, Font(14.0f).getStringWidth(showToggle.getButtonText()) + 34)));
+    status.removeFromRight(6);
+    shareToggle.setBounds(status.removeFromRight(126));
+    status.removeFromRight(10);
     midiStatus.setBounds(status);
     r.removeFromBottom(4);
     keyboard.setBounds(r);
@@ -556,6 +589,21 @@ void InstrumentPanel::notesChanged()
     if (isFretted()) fretboard.repaint();
     else keyboard.repaint();
 
+    // chord names for the held keys (mine: MIDI and mouse together), and the other person's
+    std::vector<int> mine, theirs;
+    for (int n = 0; n < 128; ++n) {
+        if (notes.isSounding(n, NoteSource::Midi) || notes.isSounding(n, NoteSource::Local)) mine.push_back(n);
+        if (notes.isSounding(n, NoteSource::Remote)) theirs.push_back(n);
+    }
+    auto myChord = String(chordName(identifyChord(mine), naming.useFlats, naming.transpose));
+    auto theirChord = String(chordName(identifyChord(theirs), naming.useFlats, naming.transpose));
+    String chordText = myChord;
+    if (theirChord.isNotEmpty()) {
+        auto who = noteShare.getRemoteName().isNotEmpty() ? noteShare.getRemoteName() : TRANS("Shared");
+        chordText = (myChord.isNotEmpty() ? myChord + "   " : String()) + who + ": " + theirChord;
+    }
+    if (chordLabel.getText() != chordText) chordLabel.setText(chordText, dontSendNotification);
+
     // the last note played, with written and concert pitch told apart when transposing
     if (lastNote < 0) {
         lastNoteLabel.setText({}, dontSendNotification);
@@ -582,16 +630,35 @@ void InstrumentPanel::changeListenerCallback(ChangeBroadcaster *)
     updateMidiStatus();
 }
 
-void InstrumentPanel::timerCallback()
+void InstrumentPanel::notesArrived(const std::vector<NoteEvent> & events)
 {
-    NoteEvent ev;
-    bool changed = false;
-    while (processor.popNoteEvent(ev)) {
+    for (auto & ev : events) {
         notes.apply(ev);
-        if (ev.type == NoteEvent::NoteOn) lastNote = ev.note;
-        changed = true;
+        if (ev.type == NoteEvent::NoteOn && ev.source != NoteSource::Remote) lastNote = ev.note;
     }
-    if (changed) notesChanged();
+    notesChanged();
+}
+
+void InstrumentPanel::noteShareChanged()
+{
+    updateShareControls();
+    repaint(legendArea);
+}
+
+void InstrumentPanel::updateShareControls()
+{
+    bool canShare = !noteShare.canShare || noteShare.canShare();
+    shareToggle.setToggleState(noteShare.isSharing(), dontSendNotification);
+    shareToggle.setEnabled(canShare || noteShare.isSharing());
+    shareToggle.setTooltip(canShare ? TRANS("Light up your keys on the others' screens while you play. They hear you as usual; this only shows which keys.")
+                                    : TRANS("Join a lesson to share your keys"));
+
+    showToggle.setToggleState(noteShare.isShowingRemote(), dontSendNotification);
+    auto who = noteShare.getRemoteName();
+    String text = who.isNotEmpty() ? TRANS("Show") + " " + who + TRANS("'s keys") : TRANS("Show the other person's keys");
+    if (noteShare.isRemoteSharing() && !noteShare.isShowingRemote()) text << " (" << TRANS("sharing now") << ")";
+    showToggle.setButtonText(text);
+    resized();
 }
 
 void InstrumentPanel::playLocal(int note, bool on, int channel, float velocity)
@@ -603,6 +670,7 @@ void InstrumentPanel::playLocal(int note, bool on, int channel, float velocity)
     ev.value = (uint8_t) jlimit(1, 127, roundToInt(velocity * 127.0f));
     ev.source = NoteSource::Local;
     notes.apply(ev);
+    noteShare.playLocal(ev);   // shared too, when sharing is on
     if (on) lastNote = ev.note;
     notesChanged();
 }
@@ -651,18 +719,20 @@ private:
 };
 
 ToolsPanel::ToolsPanel(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                       std::function<void()> openWorkspace, SummaryHooks summaryHooks)
+                       NoteShare & noteShare, std::function<void()> openWorkspace, SummaryHooks summaryHooks)
 {
     tabs = std::make_unique<TabbedComponent>(TabbedButtonBar::TabsAtTop);
     tabs->setTabBarDepth(28);
     tabs->addTab(TRANS("Tuner"), TinCanTheme::surface, new TunerPanel(processor), true);
     tabs->addTab(TRANS("Metronome"), TinCanTheme::surface, new MetronomePanel(processor), true);
-    tabs->addTab(TRANS("Instrument"), TinCanTheme::surface, new InstrumentPanel(processor, getDeviceManager), true);
+    tabs->addTab(TRANS("Instrument"), TinCanTheme::surface, new InstrumentPanel(processor, getDeviceManager, noteShare), true);
     if (openWorkspace)
         tabs->addTab(TRANS("Workspace"), TinCanTheme::surface, new WorkspacePanel(std::move(openWorkspace)), true);
     summaries = new SummariesPanel(std::move(summaryHooks));
     tabs->addTab(TRANS("Summaries"), TinCanTheme::surface, summaries, true);
     addAndMakeVisible(tabs.get());
+    // development aid (see TINCAN_DEMO_NOTES in InstrumentPanel): start on the instrument
+    if (SystemStats::getEnvironmentVariable("TINCAN_DEMO_NOTES", {}).isNotEmpty()) tabs->setCurrentTabIndex(2);
 }
 
 ToolsPanel::~ToolsPanel() = default;
@@ -689,11 +759,12 @@ void ToolsPanel::refreshSummaries()
 }
 
 ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
-                         std::function<void()> openWorkspace, SummaryHooks summaryHooks, std::function<void()> onCloseFunc)
+                         NoteShare & noteShare, std::function<void()> openWorkspace, SummaryHooks summaryHooks,
+                         std::function<void()> onCloseFunc)
     : DocumentWindow(TRANS("Teaching tools"), TinCanTheme::surface, DocumentWindow::allButtons),
       onClose(std::move(onCloseFunc))
 {
-    panel = new ToolsPanel(processor, std::move(getDeviceManager), std::move(openWorkspace), std::move(summaryHooks));
+    panel = new ToolsPanel(processor, std::move(getDeviceManager), noteShare, std::move(openWorkspace), std::move(summaryHooks));
 
     setUsingNativeTitleBar(true);
     setContentOwned(panel, false);

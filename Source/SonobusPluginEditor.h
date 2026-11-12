@@ -573,6 +573,10 @@ private:
     std::unique_ptr<TinCan::UpdateChecker> mUpdateChecker;   // T-025, standalone only
     TinCan::UpdateNeed mPendingUpdateNotice = TinCan::UpdateNeed::none;
     String mPendingUpdateVersion;
+    // T-074: MIDI notes for the on-screen instrument, and sharing keys in a lesson. Declared before
+    // the tools and the lesson window, so it outlives the instrument panels that listen to it.
+    std::unique_ptr<TinCan::NoteShare> mNoteShare;
+    TinCan::NoteShare & getNoteShare();
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
     // T-070: the lesson window (one web page over the whole main window) while in a lesson
     std::unique_ptr<TinCan::LessonView> mLessonView;

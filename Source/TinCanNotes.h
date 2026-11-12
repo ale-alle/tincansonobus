@@ -7,6 +7,7 @@
 #include <bitset>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // Tin Can note model for the teaching tools (T-034, T-035).
 //
@@ -15,10 +16,10 @@
 // No JUCE here so the logic can be unit tested on its own (tests/TinCanNotesTest.cpp).
 namespace TinCan {
 
-// who played a note: an external MIDI input (keyboard, or another app through a loopback port)
-// or the mouse on the on-screen instrument
-enum class NoteSource : uint8_t { Midi = 0, Local = 1 };
-constexpr int NumNoteSources = 2;
+// who played a note: an external MIDI input (keyboard, or another app through a loopback port),
+// the mouse on the on-screen instrument, or the other person in the lesson (T-074, NoteWire below)
+enum class NoteSource : uint8_t { Midi = 0, Local = 1, Remote = 2 };
+constexpr int NumNoteSources = 3;
 
 struct NoteEvent
 {
@@ -67,6 +68,29 @@ private:
     bool pedal[NumNoteSources][16] = {};
     uint8_t velocity[128] = {};
 };
+
+// Sharing your keys with the other person in a lesson (T-074). Notes travel as small text
+// messages on the lesson's private peer channel, tagged NoteWire::Tag. They only light keys on the
+// other side: the sound itself already arrives through the lesson audio.
+//   "e:<events>"          notes as they happen: 6 hex digits each, type/channel/note/value
+//   "s:<p>|<held>|<sus>"  about once a second: pedal (0/1), then held and pedal-held notes (2 hex
+//                         digits each). The receiver replaces what it shows, so a lost message
+//                         never leaves a key stuck.
+//   "x"                   sharing stopped: forget everything
+namespace NoteWire {
+    extern const char * const Tag;   // "canduet-notes-1"
+    constexpr int MaxEvents = 64;    // per message; more are sent in the next one
+    constexpr int MaxPayload = 1024;
+
+    std::string encodeEvents(const NoteEvent * events, int count);
+    // snapshot of everything this state shows, from any source, as one player
+    std::string encodeSnapshot(const NoteState & state);
+    std::string encodeStop();
+
+    // the events that bring the receiver's NoteSource::Remote notes up to date; false (and nothing
+    // in out) for anything malformed
+    bool decode(const std::string & payload, std::vector<NoteEvent> & out);
+}
 
 // note names, concert pitch; middle C (60) is "C4" with the default middleCOctave
 std::string noteName(int note, bool useFlats = false);            // "C#" / "Db"

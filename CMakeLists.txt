@@ -406,6 +406,10 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanLesson.h
         Source/TinCanLessonRules.cpp
         Source/TinCanLessonRules.h
+        Source/TinCanNoteShare.cpp
+        Source/TinCanNoteShare.h
+        Source/TinCanChords.cpp
+        Source/TinCanChords.h
         Source/TinCanWorkspace.cpp
         Source/TinCanWorkspace.h
         Source/TinCanRecording.cpp
@@ -761,6 +765,8 @@ add_executable(TinCanTests EXCLUDE_FROM_ALL
     tests/TinCanVersionTest.cpp
     tests/TinCanAudioCheckTest.cpp
     tests/TinCanLessonRulesTest.cpp
+    tests/TinCanNoteWireTest.cpp
+    tests/TinCanChordsTest.cpp
     Source/TinCanPacketCipher.cpp
     Source/TinCanNotes.cpp
     Source/TinCanInstruments.cpp
@@ -769,6 +775,7 @@ add_executable(TinCanTests EXCLUDE_FROM_ALL
     Source/TinCanVersion.cpp
     Source/TinCanAudioCheck.cpp
     Source/TinCanLessonRules.cpp
+    Source/TinCanChords.cpp
     deps/monocypher/monocypher.c)
 
 # Tin Can audio tests (JUCE, console): cmake --build build --target TinCanAudioTests --config Release

@@ -53,3 +53,16 @@ $env:TINCAN_API_BASE = "http://localhost:8788"; $env:TINCAN_LESSON_PAGE = "http:
 & build-test\SonoBus_artefacts\Release\Standalone\CanDuet.exe --multi-instance "canduet://join?ticket=t2"
 ```
 For design checks without the app, open `lesson.html#demo=1` in a browser. The options are listed at the top of the file, for example `&people=3&role=learner&state=drop&open=mic`.
+
+## Sharing keys and chord names (T-074)
+- **Share my keys** (Tools › Instrument): while on, your MIDI keyboard and the keys you click light up on everyone else's Instrument view, in red with your name. It's off until you switch it on, and switches off when the lesson ends.
+- **Show … keys** is on by default, so nobody has to find a setting first. Untick it to hide them. When someone starts sharing, the others get a notice: "Ms Rivera is sharing their keys. Open Tools, then Instrument, to see them."
+- It only lights keys. The sound already comes through the lesson audio, so nothing is played twice.
+- **Chord name:** above the keyboard, for the keys you hold ("Am7", "G7/B", "Csus4"), and for the shared keys ("Ms Rivera: G7"). It follows the Flats and transposing settings. Notes that don't make a known chord show no name rather than a wrong one.
+- **How it travels:** small text messages on the lesson's private peer channel (`TinCan::NoteWire`, tag `canduet-notes-1`). Notes are sent as they happen, at most 30 batches a second. A snapshot of the held keys goes out once a second, so a lost message never leaves a key stuck. If nothing arrives for 4 seconds, the other person's keys are cleared.
+- **Code:**
+  - `Source/TinCanNoteShare.{h,cpp}`: one reader for the MIDI input, plus sending and receiving.
+  - `NoteWire` in `TinCanNotes`.
+  - `Source/TinCanChords.{h,cpp}`.
+  - Tests in `tests/TinCanNoteWireTest.cpp` and `tests/TinCanChordsTest.cpp`.
+- **Testing on one PC:** set `TINCAN_DEMO_NOTES` (e.g. `A3 C4 E4 G4`) for one copy and another value for the second copy. Tools then opens on Instrument with those keys held and shared.

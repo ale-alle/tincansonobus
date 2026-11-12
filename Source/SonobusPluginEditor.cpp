@@ -1781,6 +1781,17 @@ void SonobusAudioProcessorEditor::sbChatEventReceived(SonobusAudioProcessor *com
         return;
     }
 
+    if (mesg.tags == TinCan::NoteWire::Tag) {
+        // shared keys (T-074); arrives off the message thread
+        auto from = mesg.from;
+        auto payload = mesg.message.substring(0, TinCan::NoteWire::MaxPayload + 1);
+        Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+        MessageManager::callAsync([safeThis, from, payload]() {
+            if (safeThis) safeThis->getNoteShare().receive(from, payload);
+        });
+        return;
+    }
+
     if (TinCan::isRecordingTag(mesg.tags)) {
         {
             const ScopedLock sl(mRecordingMsgLock);
@@ -3365,7 +3376,7 @@ void SonobusAudioProcessorEditor::showToolsWindow(bool show)
         return;
     }
     Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
-    mToolsWindow = std::make_unique<TinCan::ToolsWindow>(processor, getAudioDeviceManager, [safeThis]() {
+    mToolsWindow = std::make_unique<TinCan::ToolsWindow>(processor, getAudioDeviceManager, getNoteShare(), [safeThis]() {
         if (safeThis) safeThis->showWorkspace();
     }, makeSummaryHooks(), [safeThis]() {
         // closing destroys the window, which stops the MIDI copy; do it after the click returns
@@ -3413,6 +3424,7 @@ void SonobusAudioProcessorEditor::showWorkspace()
 
 void SonobusAudioProcessorEditor::closeLessonVideo()
 {
+    if (mNoteShare) mNoteShare->lessonEnded();
     if (mLessonView) {
         mLessonView.reset();
         mMarkPressedAt = -1.0;
@@ -3420,6 +3432,31 @@ void SonobusAudioProcessorEditor::closeLessonVideo()
     }
     mVideoWindow.reset();
     mVideoIdentity.clear();
+}
+
+TinCan::NoteShare & SonobusAudioProcessorEditor::getNoteShare()
+{
+    if (!mNoteShare) {
+        mNoteShare = std::make_unique<TinCan::NoteShare>(processor);
+        Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+        mNoteShare->canShare = [safeThis]() {
+            if (!safeThis) return false;
+            auto & proc = safeThis->processor;
+            return proc.isConnectedToServer() && proc.getCurrentJoinedGroup().isNotEmpty() && proc.getNumberRemotePeers() > 0;
+        };
+        mNoteShare->sendToPeers = [safeThis](const String & payload) {
+            if (!safeThis) return;
+            auto & proc = safeThis->processor;
+            SBChatEvent ev(SBChatEvent::UserType, proc.getCurrentJoinedGroup(), safeThis->getMyLessonName(), "",
+                           TinCan::NoteWire::Tag, payload);
+            proc.sendChatEvent(ev);
+        };
+        mNoteShare->onRemoteStarted = [safeThis](const String & who) {
+            if (!safeThis) return;
+            safeThis->showPopTip(who + " " + TRANS("is sharing their keys. Open Tools, then Instrument, to see them."), 6000, nullptr, 320);
+        };
+    }
+    return *mNoteShare;
 }
 
 TinCan::LessonView::Hooks SonobusAudioProcessorEditor::makeLessonHooks()
@@ -3507,7 +3544,8 @@ TinCan::LessonView::Hooks SonobusAudioProcessorEditor::makeLessonHooks()
     h.makeTools = [safeThis]() -> std::unique_ptr<TinCan::ToolsPanel> {
         if (!safeThis) return nullptr;
         // no Workspace tab: the lesson bar has its own Board button
-        return std::make_unique<TinCan::ToolsPanel>(safeThis->processor, safeThis->getAudioDeviceManager, nullptr, safeThis->makeSummaryHooks());
+        return std::make_unique<TinCan::ToolsPanel>(safeThis->processor, safeThis->getAudioDeviceManager, safeThis->getNoteShare(),
+                                                    nullptr, safeThis->makeSummaryHooks());
     };
     return h;
 }

@@ -146,6 +146,138 @@ int NoteState::countSounding() const
     return count;
 }
 
+// ---- sharing keys with the other person (T-074) ----
+
+namespace NoteWire {
+
+const char * const Tag = "canduet-notes-1";
+
+static const char * hexDigits = "0123456789abcdef";
+
+static void putHex(std::string & s, unsigned v, int digits)
+{
+    for (int i = digits - 1; i >= 0; --i) s += hexDigits[(v >> (4 * i)) & 0xF];
+}
+
+static bool getHex(const std::string & s, size_t pos, int digits, unsigned & out)
+{
+    if (pos + (size_t) digits > s.size()) return false;
+    out = 0;
+    for (int i = 0; i < digits; ++i) {
+        char c = s[pos + (size_t) i];
+        unsigned d;
+        if (c >= '0' && c <= '9') d = (unsigned) (c - '0');
+        else if (c >= 'a' && c <= 'f') d = (unsigned) (c - 'a' + 10);
+        else return false;
+        out = (out << 4) | d;
+    }
+    return true;
+}
+
+std::string encodeEvents(const NoteEvent * events, int count)
+{
+    std::string s = "e:";
+    for (int i = 0; i < count && i < MaxEvents; ++i) {
+        const auto & ev = events[i];
+        putHex(s, (unsigned) ev.type, 1);
+        putHex(s, ev.channel & 0x0Fu, 1);
+        putHex(s, ev.note & 0x7Fu, 2);
+        putHex(s, ev.value & 0x7Fu, 2);
+    }
+    return s;
+}
+
+std::string encodeSnapshot(const NoteState & state)
+{
+    bool pedal = false;
+    for (int src = 0; src < NumNoteSources; ++src) pedal = pedal || state.isPedalDown((NoteSource) src);
+    std::string held, sus;
+    for (int n = 0; n < 128; ++n) {
+        if (!state.isSounding(n)) continue;
+        if (state.isSustainedOnly(n)) putHex(sus, (unsigned) n, 2);
+        else putHex(held, (unsigned) n, 2);
+    }
+    return std::string("s:") + (pedal ? "1" : "0") + "|" + held + "|" + sus;
+}
+
+std::string encodeStop()
+{
+    return "x";
+}
+
+static NoteEvent remote(NoteEvent::Type type, int note = 0, int value = 0, int channel = 0)
+{
+    NoteEvent ev;
+    ev.type = type;
+    ev.channel = (uint8_t) channel;
+    ev.note = (uint8_t) note;
+    ev.value = (uint8_t) value;
+    ev.source = NoteSource::Remote;
+    return ev;
+}
+
+// a list of notes, 2 hex digits each, between pos and end
+static bool getNotes(const std::string & s, size_t pos, size_t end, std::vector<int> & notes)
+{
+    if ((end - pos) % 2 != 0 || (end - pos) / 2 > 128) return false;
+    for (size_t i = pos; i < end; i += 2) {
+        unsigned n;
+        if (!getHex(s, i, 2, n) || n > 127) return false;
+        notes.push_back((int) n);
+    }
+    return true;
+}
+
+bool decode(const std::string & payload, std::vector<NoteEvent> & out)
+{
+    out.clear();
+    if (payload.empty() || payload.size() > (size_t) MaxPayload) return false;
+
+    if (payload == "x") {
+        out.push_back(remote(NoteEvent::Reset));
+        return true;
+    }
+
+    if (payload.compare(0, 2, "e:") == 0) {
+        size_t len = payload.size() - 2;
+        if (len == 0 || len % 6 != 0 || len / 6 > (size_t) MaxEvents) return false;
+        std::vector<NoteEvent> events;
+        for (size_t pos = 2; pos < payload.size(); pos += 6) {
+            unsigned type, channel, note, value;
+            if (!getHex(payload, pos, 1, type) || !getHex(payload, pos + 1, 1, channel)
+                || !getHex(payload, pos + 2, 2, note) || !getHex(payload, pos + 4, 2, value)) return false;
+            if (type > (unsigned) NoteEvent::Reset || note > 127 || value > 127) return false;
+            events.push_back(remote((NoteEvent::Type) type, (int) note, (int) value, (int) channel));
+        }
+        out = std::move(events);
+        return true;
+    }
+
+    if (payload.compare(0, 2, "s:") == 0) {
+        // s:<p>|<held>|<sus>
+        if (payload.size() < 5 || (payload[2] != '0' && payload[2] != '1') || payload[3] != '|') return false;
+        size_t bar = payload.find('|', 4);
+        if (bar == std::string::npos || payload.find('|', bar + 1) != std::string::npos) return false;
+        std::vector<int> held, sus;
+        if (!getNotes(payload, 4, bar, held) || !getNotes(payload, bar + 1, payload.size(), sus)) return false;
+        bool pedal = payload[2] == '1';
+
+        std::vector<NoteEvent> events;
+        events.push_back(remote(NoteEvent::Reset));
+        if (pedal || !sus.empty()) events.push_back(remote(NoteEvent::Sustain, 0, 127));
+        for (int n : sus) {                       // pressed and let go while the pedal is down
+            events.push_back(remote(NoteEvent::NoteOn, n, 64));
+            events.push_back(remote(NoteEvent::NoteOff, n));
+        }
+        for (int n : held) events.push_back(remote(NoteEvent::NoteOn, n, 64));
+        out = std::move(events);
+        return true;
+    }
+    return false;
+}
+
+}
+
 std::string noteName(int note, bool useFlats)
 {
     static const char * sharps[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
