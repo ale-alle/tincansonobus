@@ -646,7 +646,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         images/settings_icon.svg
         images/skipback_icon.svg
         images/skipforward_icon.svg
-        images/sonobus_logo_96.png
+        images/canduet_logo_96.png
         images/sonobus_title_small.png
         images/soundboard.svg
         images/speaker.svg

@@ -356,7 +356,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     mTitleLabel->addMouseListener(this, false);
 
     mTitleImage = std::make_unique<ImageComponent>("title");
-    mTitleImage->setImage(ImageCache::getFromMemory(BinaryData::sonobus_logo_96_png, BinaryData::sonobus_logo_96_pngSize));
+    mTitleImage->setImage(ImageCache::getFromMemory(BinaryData::canduet_logo_96_png, BinaryData::canduet_logo_96_pngSize));
     mTitleImage->setInterceptsMouseClicks(true, false);
     mTitleImage->addMouseListener(this, false);
 

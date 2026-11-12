@@ -161,8 +161,8 @@ public:
         //dontAskAgainButton.setToggleState (getGlobalProperties().getValue (Ids::dontQueryForUpdate, {}).isNotEmpty(), dontSendNotification);
         //addAndMakeVisible (dontAskAgainButton);
 
-        appIcon = Drawable::createFromImageData (BinaryData::sonobus_logo_96_png,
-                                                  BinaryData::sonobus_logo_96_pngSize);
+        appIcon = Drawable::createFromImageData (BinaryData::canduet_logo_96_png,
+                                                  BinaryData::canduet_logo_96_pngSize);
         lookAndFeelChanged();
 
         setSize (500, 300);
