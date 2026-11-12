@@ -587,6 +587,7 @@ private:
     // T-071: the start menu (the website's sign-in and My lessons) whenever we're not in a lesson
     std::unique_ptr<TinCan::HomeView> mHomeView;
     void createHomeView();
+    void startPractice();   // Practice mode (T-075)
     // a web page (the lesson window or the start menu) covers the window: anything drawn inside it,
     // and the hidden SonoBus controls' shortcuts, must stay out of the way
     bool isCoveredByWebView() const { return mLessonView != nullptr || (mHomeView != nullptr && mHomeView->isVisible()); }

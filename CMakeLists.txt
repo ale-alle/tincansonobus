@@ -731,6 +731,14 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         add_custom_command(TARGET ${target_name}_Standalone POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${TINCAN_WEBVIEW2_LOADER}" "$<TARGET_FILE_DIR:${target_name}_Standalone>")
     endif()
+    # Practice mode (T-075) uses the app's own copy of the lesson page, so it works offline
+    if (TARGET ${target_name}_Standalone)
+        add_custom_command(TARGET ${target_name}_Standalone POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}_Standalone>/lesson"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/video-page/lesson.html" "$<TARGET_FILE_DIR:${target_name}_Standalone>/lesson"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/video-page/fonts" "$<TARGET_FILE_DIR:${target_name}_Standalone>/lesson/fonts"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/video-page/cans" "$<TARGET_FILE_DIR:${target_name}_Standalone>/lesson/cans")
+    endif()
             
 endfunction()
 

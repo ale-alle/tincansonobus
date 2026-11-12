@@ -78,3 +78,13 @@ For design checks without the app, open `lesson.html#demo=1` in a browser. The o
 - **Signing in:** stays on the website. The app never sees a password. The web view keeps the session in `%APPDATA%\CanDuet\WebView2`.
 - **Offline:** if the site can't be reached, a native screen says so, with Try again and Set up your sound.
 - **Fallbacks:** without WebView2, or with `TINCAN_DEV_CONNECT=1`, SonoBus's window stays.
+
+## Practice mode (T-075)
+- **Getting in:** **Practise on your own**, on My lessons in the app, or **Practise** on the offline screen. Practice mode is the lesson window with nobody else and no connection.
+- **What's different:** your camera fills the people area, with no string, connection label, Share, Chat or waiting card. **Leave** becomes **End practice**.
+- **Everything else works as in a lesson:** Mic options, Hear myself, Camera, Tools (tuner, metronome, instrument and chord names, summaries), Board, Settings, and Record.
+- **Recording on your own:** it starts straight away, with no asking. Highlights work. Summaries are titled "Practice".
+- **Works offline:** the page is the app's own copy, next to CanDuet.exe in `lesson\` (`lesson.html` plus `fonts\` and `cans\`). The build's post-build step and the installer put it there. Real lessons still load the page from the website. `TINCAN_PRACTICE_PAGE` overrides it for development.
+- **Camera:** comes straight from WebView2 (no video room), so nothing leaves the computer.
+- **Ready for lesson modules:** the app sends every MIDI note it sees to the page (`{"t":"notes","e":[[type,channel,note,value,source],…]}`), and the page passes them on as a `canduet-notes` event. That big camera area is meant to host lesson modules later, and they can react to what the student plays.
+- **Code:** `LessonInfo::practice` and `getPracticePage()` in `TinCanLesson`, `startPractice()` in the editor, and `body[data-mode=practice]` in `lesson.html`.

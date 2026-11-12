@@ -55,6 +55,7 @@ Source: "CanDuet\CanDuet.exe"; DestDir: "{app}"; Flags: ignoreversion signonce
 Source: "CanDuet\CanDuet.exe"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 Source: "CanDuet\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "CanDuet\lesson\*"; DestDir: "{app}\lesson"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "gpl-3.0.txt"; DestDir: "{app}"; DestName: "LICENSE.txt"
 Source: "SOURCE.txt"; DestDir: "{app}"
 

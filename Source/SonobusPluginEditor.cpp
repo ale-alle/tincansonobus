@@ -3331,7 +3331,8 @@ void SonobusAudioProcessorEditor::saveLessonSummary(double durationSeconds, bool
     auto audio = lastRecordedFile.getLocalFile();
 
     TinCan::LessonSummary summary;
-    summary.title = isInLessonRoom() ? mLessonTitle : String();
+    summary.title = isInLessonRoom() ? mLessonTitle
+                  : (mLessonView && mLessonView->isPractice()) ? TRANS("Practice") : String();
     summary.durationSeconds = durationSeconds;
     summary.started = mRecordingStarted.toMilliseconds() > 0 ? mRecordingStarted
                                                              : Time::getCurrentTime() - RelativeTime::seconds(durationSeconds);
@@ -3467,11 +3468,44 @@ void SonobusAudioProcessorEditor::createHomeView()
     TinCan::HomeView::Hooks hooks;
     hooks.join = [safeThis](const String & url) { if (safeThis) safeThis->handleTinCanURL(url); };
     hooks.setup = [safeThis]() { if (safeThis) safeThis->showAudioSetup(true); };
+    hooks.practice = [safeThis]() { if (safeThis) safeThis->startPractice(); };
     mHomeView = TinCan::HomeView::create(std::move(hooks));
     if (mHomeView) {
         addAndMakeVisible(mHomeView.get());
         resized();
     }
+}
+
+void SonobusAudioProcessorEditor::startPractice()
+{
+    // on your own: the lesson window without a lesson room or video, from the app's own copy of the
+    // page, so it works offline. Tools, recordings and highlights work as in a lesson.
+    if (mLessonView || mTicketRedeemer) return;
+
+    TinCan::LessonInfo info;
+    info.title = TRANS("Practice");
+    info.myName = currConnectionInfo.userName.isNotEmpty() ? currConnectionInfo.userName : SystemStats::getFullUserName();
+    if (info.myName.trim().isEmpty()) info.myName = TRANS("You");
+    info.teacher = true;    // every control: nobody else to keep things simple for
+    info.practice = true;
+
+    auto hooks = makeLessonHooks();
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    hooks.leave = [safeThis]() {
+        // nothing to disconnect from
+        MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
+    };
+    hooks.shareVideoId = nullptr;
+
+    mLessonView = TinCan::LessonView::create(processor, TinCan::VideoInfo(), info, std::move(hooks));
+    if (!mLessonView) {
+        AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, TRANS("Practice"),
+                                         TRANS("Practice mode couldn't start: CanDuet's lesson page is missing. Reinstall CanDuet."), TRANS("OK"));
+        return;
+    }
+    showToolsWindow(false);
+    addAndMakeVisible(mLessonView.get());
+    resized();
 }
 
 TinCan::NoteShare & SonobusAudioProcessorEditor::getNoteShare()
@@ -3581,6 +3615,7 @@ TinCan::LessonView::Hooks SonobusAudioProcessorEditor::makeLessonHooks()
             out = setup.outputDeviceName;
         }
     };
+    h.noteShare = &getNoteShare();
     h.makeTools = [safeThis]() -> std::unique_ptr<TinCan::ToolsPanel> {
         if (!safeThis) return nullptr;
         // no Workspace tab: the lesson bar has its own Board button

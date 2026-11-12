@@ -66,13 +66,16 @@ VideoTilesView::VideoTilesView(const Options & options, const String & origin_)
 {
 }
 
-std::unique_ptr<VideoTilesView> VideoTilesView::create(const String & page, const VideoInfo & video, const String & displayName)
+std::unique_ptr<VideoTilesView> VideoTilesView::create(const String & page, const VideoInfo & video, const String & displayName,
+                                                       const String & extraHash)
 {
     auto options = makeWebViewOptions();
     if (!WebBrowserComponent::areOptionsSupported(options)) return nullptr;
 
-    std::unique_ptr<VideoTilesView> view(new VideoTilesView(options, originOf(page)));
-    view->goToURL(buildVideoPageURL(page, video, displayName));
+    // a page on disk (Practice mode's own copy) may only use files of its own folder
+    auto origin = page.startsWithIgnoreCase("file:") ? page.upToLastOccurrenceOf("/", true, false) : originOf(page);
+    std::unique_ptr<VideoTilesView> view(new VideoTilesView(options, origin));
+    view->goToURL(buildVideoPageURL(page, video, displayName) + extraHash);
     return view;
 }
 

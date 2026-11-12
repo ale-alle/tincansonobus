@@ -40,6 +40,11 @@ namespace TinCan {
 // lesson page: TINCAN_LESSON_PAGE (https, or http to localhost), else <video page>lesson.html
 String getLessonPage();
 
+// Practice mode's page (T-075): the app's own copy next to CanDuet.exe (lesson\lesson.html), so it
+// works without the internet; TINCAN_PRACTICE_PAGE (https, or http to localhost) for development.
+// Empty when the copy is missing.
+String getPracticePage();
+
 struct LessonInfo
 {
     String title;
@@ -47,9 +52,10 @@ struct LessonInfo
     int64 startsAtMs = 0;   // 0 when the server didn't say
     int64 endsAtMs = 0;
     bool teacher = true;    // a missing role (older server) gets the full controls, as before
+    bool practice = false;  // Practice mode (T-075): on your own, no lesson room, no video room
 };
 
-class LessonView : public Component, private Timer
+class LessonView : public Component, private Timer, private NoteShare::Listener
 {
 public:
     struct Hooks
@@ -62,6 +68,7 @@ public:
         std::function<bool()> boardOpen;
         std::function<void(String & in, String & out)> deviceNames;
         std::function<std::unique_ptr<ToolsPanel>()> makeTools;
+        NoteShare * noteShare = nullptr;   // MIDI notes go to the page too, for lesson modules (T-075)
     };
 
     // returns nullptr when WebView2 can't start on this computer
@@ -78,6 +85,7 @@ public:
     void showToast(const String & text, int timeoutMs = 5000);
 
     bool isToolsOpen() const { return toolsOpen; }
+    bool isPractice() const { return info.practice; }
     void setToolsOpen(bool open);
     ToolsPanel * getTools() const;
 
@@ -87,6 +95,7 @@ private:
     LessonView(SonobusAudioProcessor & processor, std::unique_ptr<VideoTilesView> page, const LessonInfo & info, Hooks hooks);
 
     void timerCallback() override;
+    void notesArrived(const std::vector<NoteEvent> & events) override;
     void handleMessage(const var & message);
     void handlePeerMessage(int index, const String & kind, const var & value);
     void sendState();

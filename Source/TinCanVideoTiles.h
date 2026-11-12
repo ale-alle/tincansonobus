@@ -36,7 +36,9 @@ class VideoTilesView : public WebBrowserComponent
 public:
     // returns nullptr when WebView2 can't start on this computer
     // page: an allowed https page, or http on localhost (the lesson page, TinCanLesson.h); video may be empty
-    static std::unique_ptr<VideoTilesView> create(const String & page, const VideoInfo & video, const String & displayName);
+    // extraHash: more "&key=value" after the page's own hash values (Practice mode: "&practice=1")
+    static std::unique_ptr<VideoTilesView> create(const String & page, const VideoInfo & video, const String & displayName,
+                                                  const String & extraHash = {});
 
     // called on the message thread with each parsed message from our own page
     std::function<void(const var &)> onMessage;
@@ -60,7 +62,7 @@ private:
 class VideoTilesView : public Component
 {
 public:
-    static std::unique_ptr<VideoTilesView> create(const String &, const VideoInfo &, const String &) { return nullptr; }
+    static std::unique_ptr<VideoTilesView> create(const String &, const VideoInfo &, const String &, const String & = {}) { return nullptr; }
     std::function<void(const var &)> onMessage;
     void send(const var &) {}
 };

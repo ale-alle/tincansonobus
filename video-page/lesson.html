@@ -9,6 +9,12 @@
      docks into the gap this page leaves for it (#dockHole).
      The app opens  <this page>#url=<wss://…>&token=<LiveKit JWT>&name=<display name>
      and talks to the page through WebView2 messages (see Source/TinCanLesson.h).
+     &practice=1 is Practice mode (T-075): on your own, no connection; your camera fills the people area
+     (kept for lesson modules later), no string, Share or Chat. The app loads its own copy of this page
+     for it (next to CanDuet.exe, in lesson\), so it works without the internet.
+     The app also sends the MIDI notes it sees: {"t":"notes","e":[[type,channel,note,value,source],…]}
+     (type 0 on, 1 off, 2 pedal, 3 all notes off, 4 all sound off, 5 reset; source 0 MIDI input, 1 mouse,
+     2 the other person). The page passes them on as a "canduet-notes" event for lesson modules.
      #demo=1 shows made-up people without the app or a video server, for design checks:
        &people=0..4  &role=teacher|learner  &state=live|waiting|problem|drop  &open=mic|cam|share|rec|set|leave|conn
        &flip=1  &chat=1  &tools=1  &rec=1  &hover=1
@@ -88,6 +94,13 @@ body[data-state=problem] .sknot::before, body[data-state=drop] .sknot::before { 
 .tile { position: relative; min-width: 0; min-height: 0; border-radius: var(--r-tile); perspective: 1600px; outline: none; }
 .tile.self { aspect-ratio: 4 / 3; max-height: 78%; width: 100%; }
 body[data-many] .tile.self { aspect-ratio: 16 / 10; }
+/* Practice mode (T-075): on your own; your camera takes the whole area, kept for lesson modules later */
+body[data-mode=practice] .others, body[data-mode=practice] .pstring, body[data-mode=practice] .sknot,
+body[data-mode=practice] #pop-conn, body[data-mode=practice] #shareBtn, body[data-mode=practice] #chatBtn,
+body[data-mode=practice] .dock-r { display: none !important; }
+body[data-mode=practice] .people { gap: 0; }
+body[data-mode=practice] .mine { flex: 1; max-width: none; }
+body[data-mode=practice] .tile.self { aspect-ratio: auto; max-height: none; height: 100%; }
 .others .tile.self { aspect-ratio: auto; max-height: none; height: 100%; }
 .flipper { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .55s cubic-bezier(.4, .1, .2, 1); }
 .tile.flipped .flipper { transform: rotateY(180deg); }
@@ -426,6 +439,18 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   const params = new URLSearchParams(location.hash.slice(1));
   history.replaceState(null, "", location.pathname + location.search);
   const demo = params.get("demo") === "1";
+  const practice = params.get("practice") === "1";
+  if (practice) {
+    body.dataset.mode = "practice";
+    $("#leaveBtn").lastChild.textContent = "End practice";
+    $("#pop-leave h3").textContent = "End practice?";
+    $("#pop-leave p").textContent = "Your recordings and highlights stay in Tools › Summaries.";
+    $("#pop-leave [data-act=leave]").textContent = "End practice";
+    $("#pop-rec h3").textContent = "Record your practice?";
+    $("#recAskP").textContent = "It's saved on this computer only. Mark the good moments as you go; everything shows up in Tools › Summaries.";
+    $("#pop-rec [data-act=recask]").textContent = "Start recording";
+    $("#recBtn").dataset.tip = "Record your practice";
+  }
   const host = window.chrome && window.chrome.webview;   // the CanDuet app
   const myName = (params.get("name") || "").slice(0, 80);
 
@@ -672,9 +697,9 @@ body:not([data-rec=recording]) .rec-only { display: none; }
 
     // the room's state decides how the string hangs
     const dropped = audioPeers.some((p) => p.connected === false);
-    const st = conn === "lost" ? "problem" : n === 0 ? "waiting" : dropped ? "drop" : "live";
+    const st = practice ? "practice" : conn === "lost" ? "problem" : n === 0 ? "waiting" : dropped ? "drop" : "live";
     body.dataset.state = st;
-    $("#wait").hidden = n > 0;
+    $("#wait").hidden = n > 0 || practice;
     $("#waitBox").hidden = st === "problem";
     $("#problemBox").hidden = st !== "problem";
     $("#chkRoom").className = conn === "connected" ? "" : "no";
@@ -961,6 +986,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     }
     if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== "range" && e.target.type !== "checkbox" || e.ctrlKey || e.altKey || e.metaKey) return;
     const k = e.key.toLowerCase();
+    if (practice && k === "c") return;
     const map = { m: "#micBtn", v: "#camBtn", t: "#toolsBtn", b: "#boardBtn", c: "#chatBtn" };
     if (map[k]) { e.preventDefault(); $(map[k]).click(); }
     if (k === "h" && rec.phase === "recording") { e.preventDefault(); openPop($("#markBtn")); }
@@ -984,6 +1010,12 @@ body:not([data-rec=recording]) .rec-only { display: none; }
       if (m.t === "state") onState(m);
       else if (m.t === "chat" && Array.isArray(m.items)) addChat(m.items.slice(0, 200));
       else if (m.t === "toast" && typeof m.text === "string") toast(m.text.slice(0, 400), m.ms);
+      else if (m.t === "notes" && Array.isArray(m.e)) {
+        const events = m.e.slice(0, 256).filter((x) => Array.isArray(x) && x.length === 5 && x.every((v) => Number.isInteger(v)))
+          .map(([type, channel, note, value, source]) => ({ type, channel, note, value, source }));
+        state.notes = (state.notes || 0) + events.length;
+        if (events.length) window.dispatchEvent(new CustomEvent("canduet-notes", { detail: events }));
+      }
     });
   }
 
@@ -1018,7 +1050,33 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     nameFromTip($("#camBtn"));
     $("#self .avatar").hidden = camOn && !selfVideo.hidden;
   }
+  // Practice mode: the camera straight from the browser engine, no video room (T-075)
+  let localStream = null;
+  function stopLocalCamera() {
+    if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
+    selfVideo.srcObject = null;
+    selfVideo.hidden = true;
+  }
+  async function startLocalCamera(deviceId) {
+    stopLocalCamera();
+    try {
+      const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { ...size, deviceId: { exact: deviceId } } : size });
+      selfVideo.srcObject = localStream;
+      selfVideo.hidden = false;
+      camOn = true;
+    } catch (e) {
+      camOn = false;
+      toast(e && e.name === "NotAllowedError"
+        ? "CanDuet isn't allowed to use your camera. Allow it in Windows Settings › Privacy › Camera."
+        : "Your camera couldn't start. Close other apps that use it, or pick another camera.", 8000);
+    }
+    showCam();
+  }
+  window.addEventListener("pagehide", stopLocalCamera);
+
   async function startCamera(deviceId) {
+    if (practice) return startLocalCamera(deviceId);
     if (!room) return;
     try {
       await room.localParticipant.setCameraEnabled(true, deviceId ? { deviceId } : undefined);
@@ -1035,6 +1093,11 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   }
   async function toggleCamera() {
     if (demo) { camOn = !camOn; showCam(); return; }
+    if (practice) {
+      if (camOn) { stopLocalCamera(); camOn = false; showCam(); return; }
+      let saved = null; try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
+      return startLocalCamera(saved || undefined);
+    }
     if (!room) return;
     if (camOn) {
       try { await room.localParticipant.setCameraEnabled(false); } catch (_) {}
@@ -1046,17 +1109,23 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   }
   async function listCameras() {
     const sel = $("#camSel");
-    if (!LK) return;
-    let cams = [];
-    try { cams = await LK.Room.getLocalDevices("videoinput", false); } catch (_) {}
-    const active = room ? room.getActiveDevice("videoinput") : "";
+    let cams = [], active = "";
+    if (practice || !LK) {
+      try { cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput"); } catch (_) {}
+      const track = localStream && localStream.getVideoTracks()[0];
+      active = track ? (track.getSettings().deviceId || "") : "";
+    } else {
+      try { cams = await LK.Room.getLocalDevices("videoinput", false); } catch (_) {}
+      active = room ? room.getActiveDevice("videoinput") : "";
+    }
     sel.replaceChildren(...cams.map((c, i) => { const o = document.createElement("option"); o.value = c.deviceId; o.textContent = c.label || "Camera " + (i + 1); o.selected = c.deviceId === active; return o; }));
     if (!cams.length) { const o = document.createElement("option"); o.textContent = "No camera found"; sel.replaceChildren(o); }
     sel.disabled = cams.length < 2;
   }
   $("#camSel").addEventListener("change", (e) => {
     try { localStorage.setItem("canduet.camera", e.target.value); } catch (_) {}
-    if (room) room.switchActiveDevice("videoinput", e.target.value).catch(() => {});
+    if (practice) startLocalCamera(e.target.value);
+    else if (room) room.switchActiveDevice("videoinput", e.target.value).catch(() => {});
   });
   $("#mirror").addEventListener("change", (e) => {
     body.classList.toggle("nomirror", !e.target.checked);
@@ -1158,6 +1227,12 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   // ---- connect the video ----
   if (host) send({ t: "ready" });
   showCam(); showShare();
+  if (practice) {
+    state.phase = "practice";
+    let saved = null; try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
+    startLocalCamera(saved || undefined);
+    return;
+  }
   const sfuUrl = params.get("url") || "", token = params.get("token") || "";
   if (!LK) { toast("Video couldn't load. Your lesson audio still works.", 10000); return; }
   if (!sfuUrl && !token) { state.phase = "audio-only"; return; }   // a lesson without video

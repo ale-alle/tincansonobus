@@ -101,6 +101,10 @@ public:
             SafePointer<HomeView> safe(&owner);
             MessageManager::callAsync([safe]() { if (safe && safe->hooks.setup) safe->hooks.setup(); });
         }
+        else if (type == "practice") {
+            SafePointer<HomeView> safe(&owner);
+            MessageManager::callAsync([safe]() { if (safe && safe->hooks.practice) safe->hooks.practice(); });
+        }
         else if (type == "open" && url.length() <= 2048
                  && (isAllowedPaymentURL(url) || (url.toLowerCase().startsWith(origin) && !url.containsAnyOf(" \"'<>\\")))) {
             // a Stripe page, or a page of the site that isn't part of the start menu (contact, policies)
@@ -134,7 +138,7 @@ private:
 class HomeView::Offline : public Component, private Timer
 {
 public:
-    Offline(std::function<void()> retry_, std::function<void()> setup)
+    Offline(std::function<void()> retry_, std::function<void()> setup, std::function<void()> practice)
         : retry(std::move(retry_))
     {
         title.setText(TRANS("Your lessons can't be shown right now"), dontSendNotification);
@@ -144,7 +148,7 @@ public:
         addAndMakeVisible(title);
 
         text.setText(TRANS("CanDuet couldn't load tincanstudios.ca. Check that this computer is online; "
-                           "CanDuet tries again by itself every 30 seconds. You can set up your sound in the meantime."),
+                           "CanDuet tries again by itself every 30 seconds. You can practise or set up your sound in the meantime."),
                      dontSendNotification);
         text.setFont(Font(16.0f));
         text.setJustificationType(Justification::centred);
@@ -153,8 +157,10 @@ public:
 
         retryButton.onClick = [this]() { if (retry) retry(); };
         setupButton.onClick = std::move(setup);
+        practiceButton.onClick = std::move(practice);
         addAndMakeVisible(retryButton);
         addAndMakeVisible(setupButton);
+        addAndMakeVisible(practiceButton);
     }
 
     void visibilityChanged() override
@@ -172,8 +178,10 @@ public:
         r.removeFromTop(8);
         text.setBounds(r.removeFromTop(80));
         r.removeFromTop(16);
-        auto row = r.removeFromTop(40).withSizeKeepingCentre(380, 40);
+        auto row = r.removeFromTop(40).withSizeKeepingCentre(560, 40);
         retryButton.setBounds(row.removeFromLeft(180));
+        row.removeFromLeft(10);
+        practiceButton.setBounds(row.removeFromLeft(180));
         setupButton.setBounds(row.removeFromRight(180));
     }
 
@@ -184,7 +192,8 @@ private:
 
     std::function<void()> retry;
     Label title, text;
-    TextButton retryButton { TRANS("Try again") }, setupButton { TRANS("Set up your sound") };
+    TextButton retryButton { TRANS("Try again") }, setupButton { TRANS("Set up your sound") },
+               practiceButton { TRANS("Practise") };
 };
 
 std::unique_ptr<HomeView> HomeView::create(Hooks hooks)
@@ -204,7 +213,8 @@ HomeView::HomeView(Hooks hooks_) : hooks(std::move(hooks_)), page(getHomePage())
 
     SafePointer<HomeView> safe(this);
     offline = std::make_unique<Offline>([safe]() { if (safe) safe->reload(); },
-                                        [safe]() { if (safe && safe->hooks.setup) safe->hooks.setup(); });
+                                        [safe]() { if (safe && safe->hooks.setup) safe->hooks.setup(); },
+                                        [safe]() { if (safe && safe->hooks.practice) safe->hooks.practice(); });
     addChildComponent(offline.get());
 
     browser->goToURL(page);

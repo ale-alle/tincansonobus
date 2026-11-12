@@ -22,6 +22,7 @@
 // Messages from the site's pages (src/lib/app.ts in the website repo):
 //   {"t":"join","url":"canduet://join?ticket=…"}   join this lesson
 //   {"t":"setup"}                                  open Set up your sound
+//   {"t":"practice"}                               Practice mode: the lesson window on your own (T-075)
 //   {"t":"open","url":…}   in the normal browser: a Stripe page, or a page of the site that isn't
 //                             part of the start menu (contact, policies)
 namespace TinCan {
@@ -39,6 +40,7 @@ public:
     {
         std::function<void(const String & joinUrl)> join;   // a canduet://join link
         std::function<void()> setup;
+        std::function<void()> practice;   // Practice mode (T-075)
     };
 
     // nullptr when WebView2 can't start on this computer (the app then keeps SonoBus's window)

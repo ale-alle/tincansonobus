@@ -40,6 +40,8 @@ $stage = Join-Path $release "CanDuet"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force -Confirm:$false }
 New-Item -ItemType Directory $stage | Out-Null
 Copy-Item $exe, (Join-Path $built "WebView2Loader.dll") $stage
+# Practice mode's own copy of the lesson page (T-075)
+Copy-Item (Join-Path $built "lesson") (Join-Path $stage "lesson") -Recurse
 
 $out = Join-Path $release "instoutput"
 New-Item -ItemType Directory -Force $out | Out-Null

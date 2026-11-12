@@ -28,6 +28,16 @@ String getLessonPage()
     return video.upToLastOccurrenceOf("/", true, false) + "lesson.html";
 }
 
+String getPracticePage()
+{
+    auto page = SystemStats::getEnvironmentVariable("TINCAN_PRACTICE_PAGE", {}).trim();
+    if (page.startsWithIgnoreCase("https://") || isLocalhostHttp(page))
+        return page.upToFirstOccurrenceOf("#", false, false);
+
+    auto file = File::getSpecialLocation(File::currentExecutableFile).getSiblingFile("lesson").getChildFile("lesson.html");
+    return file.existsAsFile() ? URL(file).toString(false) : String();
+}
+
 #if JUCE_WEB_BROWSER && JUCE_USE_WIN_WEBVIEW2
 
 // The docked Tools panel: a borderless child window of the main window, laid exactly over the gap the
@@ -59,7 +69,10 @@ private:
 std::unique_ptr<LessonView> LessonView::create(SonobusAudioProcessor & processor, const VideoInfo & video,
                                                const LessonInfo & info, Hooks hooks)
 {
-    auto page = VideoTilesView::create(getLessonPage(), video, info.myName);
+    auto address = info.practice ? getPracticePage() : getLessonPage();
+    if (address.isEmpty()) return nullptr;
+    auto page = VideoTilesView::create(address, info.practice ? VideoInfo() : video, info.myName,
+                                       info.practice ? "&practice=1" : "");
     if (!page) return nullptr;
     return std::unique_ptr<LessonView>(new LessonView(processor, std::move(page), info, std::move(hooks)));
 }
@@ -76,12 +89,14 @@ LessonView::LessonView(SonobusAudioProcessor & p, std::unique_ptr<VideoTilesView
         chatIndex = events.size();
     }
     page->onMessage = [this](const var & message) { handleMessage(message); };
+    if (hooks.noteShare) hooks.noteShare->addListener(this);
     addAndMakeVisible(page.get());
     startTimer(100);
 }
 
 LessonView::~LessonView()
 {
+    if (hooks.noteShare) hooks.noteShare->removeListener(this);
     stopTimer();
     tools.reset();
     page.reset();
@@ -294,7 +309,8 @@ void LessonView::sendState()
     // the lesson room: connecting at first, connected once joined, lost if it goes away
     bool connected = processor.isConnectedToServer() && processor.getCurrentJoinedGroup().isNotEmpty();
     if (connected) everConnected = true;
-    String conn = connected ? "connected"
+    String conn = info.practice ? "practice"
+                : connected ? "connected"
                 : (!everConnected && Time::currentTimeMillis() - joinedAtMs < 20000) ? "connecting" : "lost";
 
     DynamicObject::Ptr lesson = new DynamicObject();
@@ -319,6 +335,23 @@ void LessonView::sendState()
     msg->setProperty("peers", peers);
     msg->setProperty("rec", var(rec.get()));
     msg->setProperty("docks", var(docks.get()));
+    page->send(var(msg.get()));
+}
+
+void LessonView::notesArrived(const std::vector<NoteEvent> & events)
+{
+    // for lesson modules in the page (T-075): [type, channel, note, value, source]
+    Array<var> list;
+    for (auto & ev : events) {
+        if (list.size() >= 256) break;
+        Array<var> e;
+        e.add((int) ev.type); e.add((int) ev.channel); e.add((int) ev.note); e.add((int) ev.value); e.add((int) ev.source);
+        list.add(var(e));
+    }
+    if (list.isEmpty()) return;
+    DynamicObject::Ptr msg = new DynamicObject();
+    msg->setProperty("t", "notes");
+    msg->setProperty("e", list);
     page->send(var(msg.get()));
 }
 
@@ -493,6 +526,7 @@ void LessonView::showToast(const String &, int) {}
 void LessonView::setToolsOpen(bool) {}
 ToolsPanel * LessonView::getTools() const { return nullptr; }
 void LessonView::timerCallback() {}
+void LessonView::notesArrived(const std::vector<NoteEvent> &) {}
 
 #endif
 
