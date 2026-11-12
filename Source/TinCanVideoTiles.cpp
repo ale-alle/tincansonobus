@@ -5,24 +5,6 @@
 
 namespace TinCan {
 
-static bool isLocalhostHttp(const String & url)
-{
-    if (!url.startsWithIgnoreCase("http://")) return false;
-    auto host = url.substring(7).upToFirstOccurrenceOf("/", false, false).upToFirstOccurrenceOf(":", false, false);
-    return host == "localhost" || host == "127.0.0.1";
-}
-
-String getVideoTilesPage()
-{
-    auto page = SystemStats::getEnvironmentVariable("TINCAN_VIDEO_TILES_PAGE", {}).trim();
-    if (page.startsWithIgnoreCase("https://") || isLocalhostHttp(page))
-        return page.upToFirstOccurrenceOf("#", false, false);
-
-    // next to the video page: …/app/video/ -> …/app/video/tiles.html
-    auto video = getVideoPage();
-    return video.upToLastOccurrenceOf("/", true, false) + "tiles.html";
-}
-
 const char * const kVideoIdTag = "canduet-video-1";
 
 bool isValidVideoIdentity(const String & identity)
@@ -84,12 +66,11 @@ VideoTilesView::VideoTilesView(const Options & options, const String & origin_)
 {
 }
 
-std::unique_ptr<VideoTilesView> VideoTilesView::create(const VideoInfo & video, const String & displayName)
+std::unique_ptr<VideoTilesView> VideoTilesView::create(const String & page, const VideoInfo & video, const String & displayName)
 {
     auto options = makeWebViewOptions();
     if (!WebBrowserComponent::areOptionsSupported(options)) return nullptr;
 
-    auto page = getVideoTilesPage();
     std::unique_ptr<VideoTilesView> view(new VideoTilesView(options, originOf(page)));
     view->goToURL(buildVideoPageURL(page, video, displayName));
     return view;

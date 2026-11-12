@@ -8,25 +8,10 @@
 
 #include <functional>
 
-// Video tiles (prototype, branch t-061-video-tiles).
-//
-// Instead of a separate video window, the video page fills the people area of the main window and
-// draws one tile per person (video, name, volume and pan sliders on hover). The page and the app
-// talk through WebView2 messages (Tin Can patch in deps/juce, WebBrowserComponent::postWebMessage):
-//
-//   app  -> page  {"t":"state","peers":[{"id","gain","pan","stereo","muted","level"}],"flipped":id}
-//   page -> app   {"t":"ready"}
-//                 {"t":"gain","id":<name>,"v":<linear 0..2>}
-//                 {"t":"pan","id":<name>,"v":<-1..1>}
-//                 {"t":"flip","id":<name>}                 show that person's full audio options
-//                 {"t":"rects","rects":{<name>:[x,y,w,h]}} tile positions as fractions of the page
-//
-// People are matched by display name: the audio room and the video room both get it from the
-// lesson ticket. See doc/TINCAN-VIDEO.md.
+// The web view that hosts the lesson page (TinCanLesson.h, T-070), plus matching people to their
+// video. It stays on its page's own site, and passes on messages from that site only, as parsed JSON
+// (Tin Can patch in deps/juce, WebBrowserComponent::postWebMessage). See doc/TINCAN-VIDEO.md.
 namespace TinCan {
-
-// tiles page: TINCAN_VIDEO_TILES_PAGE (https, or http to localhost), else <video page>tiles.html
-String getVideoTilesPage();
 
 // Matching people to their video. Display names can repeat (the audio room renames a second
 // "Sam" to "Sam 2", the video room doesn't), so each app tells the others its video identity
@@ -50,7 +35,8 @@ class VideoTilesView : public WebBrowserComponent
 {
 public:
     // returns nullptr when WebView2 can't start on this computer
-    static std::unique_ptr<VideoTilesView> create(const VideoInfo & video, const String & displayName);
+    // page: an allowed https page, or http on localhost (the lesson page, TinCanLesson.h); video may be empty
+    static std::unique_ptr<VideoTilesView> create(const String & page, const VideoInfo & video, const String & displayName);
 
     // called on the message thread with each parsed message from our own page
     std::function<void(const var &)> onMessage;
@@ -74,7 +60,7 @@ private:
 class VideoTilesView : public Component
 {
 public:
-    static std::unique_ptr<VideoTilesView> create(const VideoInfo &, const String &) { return nullptr; }
+    static std::unique_ptr<VideoTilesView> create(const String &, const VideoInfo &, const String &) { return nullptr; }
     std::function<void(const var &)> onMessage;
     void send(const var &) {}
 };

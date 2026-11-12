@@ -1776,7 +1776,7 @@ void SonobusAudioProcessorEditor::sbChatEventReceived(SonobusAudioProcessor *com
         auto from = mesg.from;
         Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
         if (identity.isNotEmpty()) MessageManager::callAsync([safeThis, from, identity]() {
-            if (safeThis && safeThis->mPeerContainer) safeThis->mPeerContainer->setPeerVideoId(from, identity);
+            if (safeThis && safeThis->mLessonView) safeThis->mLessonView->setPeerVideoId(from, identity);
         });
         return;
     }
@@ -2769,29 +2769,30 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
 
         // video runs beside the audio room; it never holds up or changes the audio join
         safeThis->closeLessonVideo();
-        if (result.video.isValid() && TinCan::isVideoBuild()) {
-            // prototype: video tiles in the main window; TINCAN_VIDEO_WINDOW=1 keeps the separate window.
-            // Without WebView2 the window explains what's missing.
-            std::unique_ptr<TinCan::VideoTilesView> tiles;
-            if (SystemStats::getEnvironmentVariable("TINCAN_VIDEO_WINDOW", {}) != "1")
-                tiles = TinCan::VideoTilesView::create(result.video, info.userName);
 
-            if (tiles) {
-                safeThis->mVideoIdentity = TinCan::getVideoIdentity(result.video.token);
-                safeThis->mPeerContainer->onShareVideoId = [safeThis]() {
-                    if (!safeThis || safeThis->mVideoIdentity.isEmpty()) return;
-                    auto & proc = safeThis->processor;
-                    SBChatEvent ev(SBChatEvent::UserType, proc.getCurrentJoinedGroup(), safeThis->getMyLessonName(), "",
-                                   TinCan::kVideoIdTag, TinCan::makeVideoIdMessage(safeThis->mVideoIdentity));
-                    proc.sendChatEvent(ev);
-                };
-                safeThis->mPeerContainer->showVideoTiles(std::move(tiles));
+        // T-070: the lesson window (lesson.html) covers the whole main window, with or without video.
+        // TINCAN_VIDEO_WINDOW=1 keeps SonoBus's own window and a separate video window (development).
+        if (TinCan::isVideoBuild() && SystemStats::getEnvironmentVariable("TINCAN_VIDEO_WINDOW", {}) != "1") {
+            TinCan::LessonInfo lesson;
+            lesson.title = result.title;
+            lesson.myName = info.userName;
+            lesson.teacher = result.teacher;
+            lesson.startsAtMs = result.startsAtMs;
+            lesson.endsAtMs = result.endsAtMs;
+            safeThis->mLessonView = TinCan::LessonView::create(safeThis->processor, result.video, lesson, safeThis->makeLessonHooks());
+            if (safeThis->mLessonView) {
+                safeThis->mVideoIdentity = result.video.isValid() ? TinCan::getVideoIdentity(result.video.token) : String();
+                safeThis->showToolsWindow(false);   // the tools dock inside the lesson window now
+                safeThis->addAndMakeVisible(safeThis->mLessonView.get());
+                safeThis->resized();
+                return;
             }
-            else {
-                safeThis->mVideoWindow = std::make_unique<TinCan::VideoWindow>(result.title, result.video, info.userName, [safeThis]() {
-                    if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
-                });
-            }
+        }
+        if (result.video.isValid() && TinCan::isVideoBuild()) {
+            // without WebView2 the window explains what's missing; the audio lesson carries on
+            safeThis->mVideoWindow = std::make_unique<TinCan::VideoWindow>(result.title, result.video, info.userName, [safeThis]() {
+                if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->closeLessonVideo(); });
+            });
         }
     });
 }
@@ -3314,6 +3315,11 @@ void SonobusAudioProcessorEditor::saveLessonSummary(double durationSeconds, bool
 
     // after a lesson recording; solo practice recordings just appear in the tab
     if (showIt && summary.people.size() > 1) {
+        if (mLessonView) {
+            mLessonView->setToolsOpen(true);
+            if (auto * tools = mLessonView->getTools()) tools->showSummary(file);
+            return;
+        }
         showToolsWindow(true);
         if (mToolsWindow) mToolsWindow->showSummary(file);
     }
@@ -3407,9 +3413,103 @@ void SonobusAudioProcessorEditor::showWorkspace()
 
 void SonobusAudioProcessorEditor::closeLessonVideo()
 {
+    if (mLessonView) {
+        mLessonView.reset();
+        mMarkPressedAt = -1.0;
+        resized();
+    }
     mVideoWindow.reset();
     mVideoIdentity.clear();
-    if (mPeerContainer) mPeerContainer->closeVideoTiles();
+}
+
+TinCan::LessonView::Hooks SonobusAudioProcessorEditor::makeLessonHooks()
+{
+    // every hook runs on the message thread, from a page message; the editor may be gone later
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    TinCan::LessonView::Hooks h;
+
+    h.shareVideoId = [safeThis]() {
+        if (!safeThis || safeThis->mVideoIdentity.isEmpty()) return;
+        auto & proc = safeThis->processor;
+        SBChatEvent ev(SBChatEvent::UserType, proc.getCurrentJoinedGroup(), safeThis->getMyLessonName(), "",
+                       TinCan::kVideoIdTag, TinCan::makeVideoIdMessage(safeThis->mVideoIdentity));
+        proc.sendChatEvent(ev);
+    };
+    h.toggleBoard = [safeThis]() {
+        if (!safeThis) return;
+        if (safeThis->mWorkspaceWindow && safeThis->mWorkspaceWindow->isVisible()) safeThis->mWorkspaceWindow->setVisible(false);
+        else safeThis->showWorkspace();
+    };
+    h.boardOpen = [safeThis]() { return safeThis && safeThis->mWorkspaceWindow && safeThis->mWorkspaceWindow->isVisible(); };
+    h.openSetup = [safeThis]() { if (safeThis) safeThis->showAudioSetup(true); };
+    h.openSettings = [safeThis]() {
+        // after the click returns: the box floats above the page as a window of its own
+        MessageManager::callAsync([safeThis]() { if (safeThis && !safeThis->settingsCalloutBox) safeThis->showSettings(true); });
+    };
+    h.openEffects = [safeThis]() {
+        MessageManager::callAsync([safeThis]() { if (safeThis && !safeThis->effectsCalloutBox) safeThis->showEffectsConfig(true); });
+    };
+    h.openHelp = []() { URL(TinCan::getApiBase() + "/help").launchInDefaultBrowser(); };
+    h.leave = [safeThis]() {
+        // the same as leaving with the Connect button; DisconnectEvent then closes the lesson window
+        MessageManager::callAsync([safeThis]() {
+            if (!safeThis) return;
+            auto & proc = safeThis->processor;
+            if (proc.isConnectedToServer()) {
+                if (proc.getWatchPublicGroups() && proc.getCurrentJoinedGroup().isNotEmpty()) proc.leaveServerGroup(proc.getCurrentJoinedGroup());
+                else proc.disconnectFromServer();
+            }
+            safeThis->closeLessonVideo();
+            safeThis->updateState();
+        });
+    };
+
+    // recording: the page only asks; the consent rules stay in RecordingConsent (T-045)
+    using Phase = TinCan::RecordingConsent::Phase;
+    h.recordPhase = [safeThis]() -> String {
+        if (!safeThis) return "idle";
+        if (safeThis->processor.isRecordingToFile()) return "recording";
+        switch (safeThis->mRecordingConsent.getPhase()) {
+            case Phase::Asking: case Phase::Agreed: return "asking";
+            case Phase::Asked: return "asked";
+            case Phase::Recording: return "recording";
+            case Phase::Idle: break;
+        }
+        return "idle";
+    };
+    h.recordSeconds = [safeThis]() { return safeThis && safeThis->processor.isRecordingToFile() ? safeThis->processor.getElapsedRecordTime() : 0.0; };
+    h.recordAsk = [safeThis]() {
+        if (safeThis && !safeThis->processor.isRecordingToFile() && safeThis->mRecordingConsent.getPhase() == Phase::Idle) safeThis->onRecordPressed();
+    };
+    h.recordStop = [safeThis]() {
+        if (safeThis && (safeThis->processor.isRecordingToFile() || safeThis->mRecordingConsent.getPhase() != Phase::Idle)) safeThis->onRecordPressed();
+    };
+    h.markStart = [safeThis]() {
+        if (safeThis && safeThis->mRecordingConsent.isRecording() && safeThis->processor.isRecordingToFile())
+            safeThis->mMarkPressedAt = safeThis->processor.getElapsedRecordTime();
+    };
+    h.markSave = [safeThis](const String & label) {
+        if (!safeThis || !safeThis->mRecordingConsent.isRecording() || !safeThis->processor.isRecordingToFile()) return;
+        auto now = safeThis->processor.getElapsedRecordTime();
+        double ago = safeThis->mMarkPressedAt >= 0.0 ? jmax(0.0, now - safeThis->mMarkPressedAt) : 0.0;
+        safeThis->mMarkPressedAt = -1.0;
+        safeThis->applyRecording(safeThis->mRecordingConsent.mark(label, ago), RecordingCause::Local);
+    };
+
+    h.deviceNames = [safeThis](String & in, String & out) {
+        if (!safeThis || !safeThis->getAudioDeviceManager) return;
+        if (auto * dm = safeThis->getAudioDeviceManager()) {
+            auto setup = dm->getAudioDeviceSetup();
+            in = setup.inputDeviceName;
+            out = setup.outputDeviceName;
+        }
+    };
+    h.makeTools = [safeThis]() -> std::unique_ptr<TinCan::ToolsPanel> {
+        if (!safeThis) return nullptr;
+        // no Workspace tab: the lesson bar has its own Board button
+        return std::make_unique<TinCan::ToolsPanel>(safeThis->processor, safeThis->getAudioDeviceManager, nullptr, safeThis->makeSummaryHooks());
+    };
+    return h;
 }
 
 void SonobusAudioProcessorEditor::handleURL(const String & urlstr)
@@ -3569,8 +3669,15 @@ void SonobusAudioProcessorEditor::showEffectsConfig(bool flag)
 
         
         Rectangle<int> bounds =  dw->getLocalArea(nullptr, mEffectsButton->getScreenBounds());
+        Component * parentForBox = dw;
+        if (mLessonView) {
+            // in a lesson the page covers this window: float above it, pointing at the Mic icon
+            auto sb = getScreenBounds();
+            bounds = Rectangle<int>(sb.getCentreX() - 200, sb.getBottom() - 70, 40, 10);
+            parentForBox = nullptr;
+        }
         DBG("callout bounds: " << bounds.toString());
-        effectsCalloutBox = & CallOutBox::launchAsynchronously (std::move(wrap), bounds , dw, false);
+        effectsCalloutBox = & CallOutBox::launchAsynchronously (std::move(wrap), bounds , parentForBox, false);
         if (CallOutBox * box = dynamic_cast<CallOutBox*>(effectsCalloutBox.get())) {
             box->setDismissalMouseClicksAreAlwaysConsumed(true);
         }
@@ -4070,6 +4177,8 @@ void SonobusAudioProcessorEditor::showSettings(bool flag)
 
 
         auto prefbounds = mOptionsView->getPreferredContentBounds();
+        // in a lesson the page covers this window, so the box floats as a window of its own
+        Component * parentForBox = mLessonView ? nullptr : dw;
 
         defHeight = prefbounds.getHeight();
 
@@ -4089,8 +4198,13 @@ void SonobusAudioProcessorEditor::showSettings(bool flag)
         
        
         Rectangle<int> bounds =  dw->getLocalArea(nullptr, mTitleLabel->getScreenBounds().reduced(10));
+        if (mLessonView) {
+            // point at the lesson bar's Settings icon, bottom right (screen coordinates)
+            auto sb = getScreenBounds();
+            bounds = Rectangle<int>(sb.getRight() - 150, sb.getBottom() - 70, 40, 10);
+        }
         DBG("callout bounds: " << bounds.toString());
-        settingsCalloutBox = & CallOutBox::launchAsynchronously (std::move(wrap), bounds , dw, false);
+        settingsCalloutBox = & CallOutBox::launchAsynchronously (std::move(wrap), bounds , parentForBox, false);
         if (CallOutBox * box = dynamic_cast<CallOutBox*>(settingsCalloutBox.get())) {
             box->setDismissalMouseClicksAreAlwaysConsumed(true);
         }
@@ -5082,6 +5196,11 @@ void SonobusAudioProcessorEditor::resized()
     // subcomponents in your editor..
 
     Component::resized();
+
+    if (mLessonView) {
+        mLessonView->setBounds(getLocalBounds());
+        mLessonView->toFront(false);
+    }
  
 #if JUCE_IOS || JUCE_ANDROID
     int narrowthresh = 480; //520;
@@ -5727,6 +5846,12 @@ void SonobusAudioProcessorEditor::updateLayout()
 
 void SonobusAudioProcessorEditor::showPopTip(const String & message, int timeoutMs, Component * target, int maxwidth)
 {
+    // in a lesson the page covers the window, so a bubble drawn here would be hidden behind it
+    if (mLessonView) {
+        mLessonView->showToast(message, timeoutMs);
+        return;
+    }
+
     if (!popTip) {
         popTip = std::make_unique<BubbleMessageComponent>();
     }

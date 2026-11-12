@@ -12,6 +12,7 @@ void runBeatClockTests();
 void runPitchTests();
 void runVersionTests();
 void runAudioCheckTests();
+void runLessonRulesTests();
 
 int main()
 {
@@ -22,6 +23,7 @@ int main()
     runPitchTests();
     runVersionTests();
     runAudioCheckTests();
+    runLessonRulesTests();
 
     if (failures == 0) {
         std::printf("TinCanTests: all checks passed\n");

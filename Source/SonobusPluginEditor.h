@@ -29,6 +29,7 @@
 #include "TinCanUpdate.h"
 #include "TinCanAudioSetup.h"
 #include "TinCanWorkspace.h"
+#include "TinCanLesson.h"
 
 class RandomSentenceGenerator;
 class WaveformTransportComponent;
@@ -573,6 +574,10 @@ private:
     TinCan::UpdateNeed mPendingUpdateNotice = TinCan::UpdateNeed::none;
     String mPendingUpdateVersion;
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
+    // T-070: the lesson window (one web page over the whole main window) while in a lesson
+    std::unique_ptr<TinCan::LessonView> mLessonView;
+    TinCan::LessonView::Hooks makeLessonHooks();
+    double mMarkPressedAt = -1.0;   // recording time when Mark was pressed in the lesson window
     String mVideoIdentity;  // our own LiveKit identity in this lesson, shared with the others (video tiles)
     bool mRetryingWithNewName = false;  // rejoining as "Name 2" because the name was taken; the lesson goes on
     // Tin Can teaching tools (T-034): on-screen instrument etc., in a window of its own

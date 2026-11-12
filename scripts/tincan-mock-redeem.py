@@ -19,6 +19,10 @@ out the same room and lesson key; MOCK_USER_NAME sets the name the other person 
 Shared test server (server/vps/install-test-api.sh): MOCK_TICKETS="<ticket>=<name>,<ticket>=<name>"
 replaces "demo-ok" with those tickets, and MOCK_VIDEO_PAGE (a file) is served at /app/video/, so
 testers need only the app and a join link.
+
+Lesson window (T-070): a name may end in ":teacher" or ":learner" ("t1=Ms Rivera:teacher") to send
+that role, and every reply carries startsAt/endsAt for a lesson that began MOCK_LESSON_AGO minutes
+ago (default 5) and lasts MOCK_LESSON_MINUTES (default 30).
 """
 import base64
 import hashlib
@@ -58,6 +62,14 @@ VIDEO_PAGE = os.environ.get("MOCK_VIDEO_PAGE", "")
 TICKETS = dict(pair.strip().split("=", 1) for pair in os.environ.get("MOCK_TICKETS", "").split(",") if pair.strip())
 if not TICKETS:
     TICKETS = {"demo-ok": ROOM["userName"]}
+
+_now = int(time.time())
+LESSON_START = _now - 60 * int(os.environ.get("MOCK_LESSON_AGO", "5"))
+LESSON_END = LESSON_START + 60 * int(os.environ.get("MOCK_LESSON_MINUTES", "30"))
+
+
+def iso(t):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
 
 
 def b64url(data):
@@ -101,8 +113,10 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             return self.reply(400, {"error": "bad_request"})
         if isinstance(ticket, str) and ticket in TICKETS:
-            name = TICKETS[ticket]
-            body = dict(ROOM, userName=name)
+            name, _, role = TICKETS[ticket].partition(":")
+            body = dict(ROOM, userName=name, startsAt=iso(LESSON_START), endsAt=iso(LESSON_END))
+            if role in ("teacher", "learner"):
+                body["role"] = role
             if VIDEO_URL:
                 # a new identity per redeem so two app instances are two participants
                 body["video"] = {"url": VIDEO_URL, "token": video_token("p-" + secrets.token_hex(6), name)}

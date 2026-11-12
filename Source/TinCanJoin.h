@@ -33,6 +33,10 @@ struct JoinResult
     AooServerConnectionInfo info;
     String title;
     VideoInfo video;  // empty when the lesson has no video (or the server sent none)
+    // T-070: who this person is in the lesson and when it runs (the lesson bar's timer). Older servers
+    // send neither: the person then gets the teacher's (full) controls and a plain elapsed time.
+    bool teacher = true;
+    int64 startsAtMs = 0, endsAtMs = 0;
 
     String getUserMessage() const;
 };

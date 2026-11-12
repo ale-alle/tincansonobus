@@ -1,0 +1,1184 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPLv3-or-later WITH Appstore-exception
+     Copyright (C) 2026 Tin Can Studios
+
+     CanDuet lesson window (T-070, D-028). Fills the whole main window during a lesson: the people
+     (video tiles, the red string between them, each person's sound on hover and behind the tile),
+     the lesson bar (Mic, Camera, Share, Tools, Board, Chat, Record, Settings, Leave) and every
+     popover. Nothing native floats over it; the only native part is the Tools panel, which the app
+     docks into the gap this page leaves for it (#dockHole).
+     The app opens  <this page>#url=<wss://…>&token=<LiveKit JWT>&name=<display name>
+     and talks to the page through WebView2 messages (see Source/TinCanLesson.h).
+     #demo=1 shows made-up people without the app or a video server, for design checks:
+       &people=0..4  &role=teacher|learner  &state=live|waiting|problem|drop  &open=mic|cam|share|rec|set|leave|conn
+       &flip=1  &chat=1  &tools=1  &rec=1  &hover=1
+     Video only: the microphone is never requested. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>CanDuet lesson</title>
+<script src="livekit-client-2.9.1.umd.js"
+        integrity="sha384-ejH14wPQkwwyImo2LYdigxCruyGOymTSDatUhlPFHPulPcrMglpJOjRVTMYqZYqQ"
+        crossorigin="anonymous"></script>
+<style>
+/* Fonts and colours are the website's (tincanstudios.ca, Source/TinCanTheme.h): Inter for text,
+   Bricolage Grotesque for headings, the night palette, the red string. Fonts are OFL (fonts/LICENSE-*). */
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(fonts/inter-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(fonts/inter-latin-ext-wght-normal.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-display: swap; font-weight: 200 800;
+  src: url(fonts/bricolage-grotesque-latin-standard-normal.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-display: swap; font-weight: 200 800;
+  src: url(fonts/bricolage-grotesque-latin-ext-standard-normal.woff2) format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+:root {
+  color-scheme: dark;
+  --night: #0a0f1e; --surface: #121a2e; --raised: #1a2440; --line: #233052; --line-strong: #3a4a75;
+  --text: #e8ecf6; --muted: #b4bed6; --subtle: #9aa6c4;
+  --string: #e5484d; --string-light: #ff6b70; --string-strong: #d7263d; --string-ink: #b01f33;
+  --ok: #5fd3c4; --warn: #f2b36b; --veil: rgba(10, 15, 30, .78);
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --r-tile: 18px; --r-ctl: 12px;
+  --dockb: 0px;  /* height of the docked Tools panel (native), set by the page when it is open */
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; background: var(--night); color: var(--text); font: 14px/1.45 var(--font-sans);
+  overflow: hidden; user-select: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--string-light); outline-offset: 2px; }
+[hidden] { display: none !important; }
+svg.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+i[data-i] { display: inline-grid; place-items: center; font-style: normal; }
+input[type=range] { accent-color: var(--string); margin: 0; }
+h2, h3, p { margin: 0; }
+body[data-role=learner] .t-only, body[data-role=teacher] .l-only { display: none !important; }
+
+/* ---------- people ---------- */
+.l-main { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px 12px 0; }
+.people { flex: 1; min-width: 0; position: relative; display: flex; gap: 44px; }
+.others { flex: 1.75; min-width: 0; display: grid; gap: 12px; }
+.mine { flex: 1; min-width: 0; max-width: 520px; display: flex; flex-direction: column; justify-content: flex-end; }
+body[data-many] .people { gap: 12px; }
+body[data-many] .mine { flex: .7; }
+.pstring { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+.pstring path { fill: none; stroke: var(--string); stroke-width: 2.5; stroke-linecap: round; transition: stroke .3s; }
+.pstring circle { fill: var(--night); stroke: var(--string); stroke-width: 2.5; }
+body[data-state=waiting] .pstring path { stroke: var(--line-strong); stroke-dasharray: 2 9; }
+body[data-state=waiting] .pstring circle { stroke: var(--line-strong); }
+body[data-state=problem] .pstring path, body[data-state=drop] .pstring path { stroke-dasharray: 46 30; opacity: .75; }
+.sknot { position: absolute; z-index: 5; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 8px; background: var(--surface);
+  border: 1.5px solid var(--line-strong); border-radius: 999px; padding: 5px 12px 5px 8px; color: var(--muted); font-size: 12.5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.sknot:hover { border-color: var(--muted); color: var(--text); }
+.sknot::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.sknot[data-q=slow]::before { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); }
+body[data-state=waiting] .sknot::before { background: var(--subtle); box-shadow: none; }
+body[data-state=problem] .sknot::before, body[data-state=drop] .sknot::before { background: var(--string); box-shadow: 0 0 0 3px color-mix(in srgb, var(--string) 25%, transparent); }
+
+.tile { position: relative; min-width: 0; min-height: 0; border-radius: var(--r-tile); perspective: 1600px; outline: none; }
+.tile.self { aspect-ratio: 4 / 3; max-height: 78%; width: 100%; }
+body[data-many] .tile.self { aspect-ratio: 16 / 10; }
+.others .tile.self { aspect-ratio: auto; max-height: none; height: 100%; }
+.flipper { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .55s cubic-bezier(.4, .1, .2, 1); }
+.tile.flipped .flipper { transform: rotateY(180deg); }
+.face { position: absolute; inset: 0; border-radius: var(--r-tile); overflow: hidden; backface-visibility: hidden; border: 1px solid var(--line); background: var(--surface); }
+.face.back { transform: rotateY(180deg); display: flex; flex-direction: column; }
+.tile.speaking .face.front { border-color: var(--string); box-shadow: 0 0 0 2px color-mix(in srgb, var(--string) 55%, transparent); }
+.tile:focus-visible .face { border-color: var(--string-light); }
+.face video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.face video.share { object-fit: contain; }
+.face video.pip { inset: auto 12px 56px auto; width: 26%; height: auto; aspect-ratio: 16 / 9; border-radius: 10px; border: 2px solid var(--line-strong); z-index: 1; }
+.tile.self video.cam { transform: scaleX(-1); }
+body.nomirror .tile.self video.cam { transform: none; }
+.avatar { position: absolute; inset: 0; display: grid; place-items: center;
+  background: radial-gradient(60% 50% at 78% 18%, #f2b36b22, transparent 70%), radial-gradient(90% 70% at 20% 100%, #1f9e8f22, transparent 70%), linear-gradient(160deg, #1d2240, #121a2e 60%, #0d1326); }
+.tile.self .avatar { background: radial-gradient(50% 45% at 18% 20%, #7ea8ff2a, transparent 70%), linear-gradient(200deg, #1d2a4a, #121a2e 55%, #0b1122); }
+.avatar span { width: 30%; max-width: 130px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; background: var(--raised);
+  border: 2px solid var(--line-strong); color: var(--muted); font: 700 clamp(20px, 5vw, 48px) var(--font-display); }
+.tile.flipped .face.front > * { filter: blur(6px) brightness(.5); }
+.label { position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px; padding: 5px 11px; border-radius: 999px; background: var(--veil);
+  font-weight: 600; font-size: 13px; max-width: calc(100% - 170px); z-index: 2; }
+.label .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label .off { color: var(--string-light); }
+.tile.self .label { max-width: calc(100% - 130px); }
+.tile.self .label .nm { flex: none; }
+.note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; background: var(--veil); border: 1px solid var(--line-strong);
+  border-radius: 16px; padding: 12px 16px; text-align: center; max-width: 80%; color: var(--muted); }
+.note b { display: block; font: 700 17px/1.3 var(--font-display); color: var(--text); }
+.tile.dropped .face.front video, .tile.dropped .avatar { filter: grayscale(.7) brightness(.45); }
+
+/* one thin level bar, never a strip */
+.meter { height: 8px; border-radius: 99px; background: color-mix(in srgb, currentColor 16%, transparent); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; transform: scaleX(0); border-radius: 99px;
+  background: linear-gradient(90deg, var(--ok) 0 70%, var(--warn) 88%, var(--string) 100%); transition: transform .09s linear; }
+.label .meter { width: 34px; height: 5px; color: #fff; flex: none; }
+
+.ctl { opacity: 0; transition: opacity .15s; z-index: 3; }
+.tile:hover .ctl, .tile:focus-within .ctl, .tile.dragging .ctl, body.pin .ctl { opacity: 1; }
+.tile.flipped .front .ctl { display: none; }
+.pan { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: min(58%, 340px); display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; background: var(--veil); font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.pan input { flex: 1; min-width: 60px; }
+.vol { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); height: min(60%, 280px); display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 10px 6px; border-radius: 999px; background: var(--veil); color: var(--muted); }
+.vol input { writing-mode: vertical-lr; direction: rtl; flex: 1; width: 22px; min-height: 50px; }
+.vol output { font-size: 11px; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.tbtns { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; }
+.tbtn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--veil); border: 1px solid var(--line-strong);
+  color: var(--text); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.tbtn:hover { border-color: var(--muted); }
+.tbtn:disabled { opacity: .5; cursor: default; }
+.tbtn svg.ic { width: 16px; height: 16px; }
+
+/* back of a tile: that person's sound, in plain words */
+.back header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.back header h3 { font: 700 18px/1.2 var(--font-display); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back .body { flex: 1; overflow: auto; padding: 16px 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 28px; align-content: start; }
+.opt { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.opt > label, .opt > .lab { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--subtle); display: flex; justify-content: space-between; gap: 8px; }
+.opt output { letter-spacing: 0; text-transform: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.opt small, .hint { color: var(--subtle); font-size: 12px; line-height: 1.4; }
+.seg { display: flex; background: var(--night); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 3px; gap: 2px; }
+.seg button { flex: 1; background: none; border: 0; border-radius: 9px; padding: 6px 8px; color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.seg button[aria-pressed=true] { background: var(--raised); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
+details.adv { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 12px; }
+details.adv summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; }
+.advgrid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pill { background: var(--raised); border: 1px solid var(--line-strong); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; }
+.pill:hover { border-color: var(--muted); }
+.pill[aria-pressed=true] { background: var(--string-strong); border-color: var(--string-strong); }
+.pill.danger { color: var(--string-light); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12.5px; color: var(--muted); margin-top: 12px; font-variant-numeric: tabular-nums; }
+.kv b { color: var(--text); font-weight: 600; }
+.sw { appearance: none; width: 36px; height: 21px; border-radius: 99px; background: var(--line-strong); position: relative; cursor: pointer; flex: none; transition: background .15s; margin: 0; }
+.sw::after { content: ""; position: absolute; left: 3px; top: 3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.sw:checked { background: var(--string-strong); }
+.sw:checked::after { transform: translateX(15px); }
+.line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.line > span { min-width: 0; }
+.line small { display: block; color: var(--subtle); font-size: 12px; }
+.nsel { background: var(--night); border: 1px solid var(--line-strong); border-radius: 10px; padding: 7px 10px; color: var(--text); width: 100%; }
+.dev { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-size: 13px; }
+.dev span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.link { background: none; border: 0; padding: 0; color: var(--text); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+
+/* waiting / could not connect: takes the other person's place */
+.wait .face { display: grid; place-items: center; padding: 28px; background: radial-gradient(70% 60% at 50% 30%, var(--raised), var(--surface)); }
+.waitbox { max-width: 440px; display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center; }
+.waitbox img { height: 110px; animation: float 7s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.waitbox h2 { font: 800 clamp(22px, 2.6vw, 30px)/1.1 var(--font-display); letter-spacing: -.02em; text-wrap: balance; }
+.waitbox p { color: var(--muted); font-size: 15px; }
+.checks { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 8px; text-align: left; align-self: stretch; }
+.checks li { display: flex; align-items: center; gap: 10px; background: var(--night); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 9px 12px; }
+.checks li .meter { flex: 1; color: var(--text); }
+.checks li i { color: var(--ok); }
+.checks li.no i { color: var(--subtle); opacity: .4; }
+.checks li.num i { color: var(--muted); width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line-strong); font-size: 12px; font-weight: 700; flex: none; }
+.btn { border: 0; border-radius: 12px; padding: 10px 18px; font-weight: 600; background: var(--string-strong); color: #fff; white-space: nowrap; }
+.btn:hover { background: var(--string-ink); }
+.btn.ghost { background: transparent; color: var(--text); border: 1.5px solid var(--line-strong); padding: 8px 14px; }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn.sm { padding: 7px 12px; border-radius: 10px; font-size: 13px; }
+
+/* chat, docked at the right: it narrows the people, never covers them */
+.dock-r { width: 320px; flex: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-tile); display: none; flex-direction: column; min-height: 0; }
+body[data-right=chat] .dock-r.chat { display: flex; }
+.dhead { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--line); }
+.dhead h3 { font: 700 16px var(--font-display); flex: 1; }
+.xbtn { width: 30px; height: 30px; border-radius: 9px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; }
+.xbtn:hover { background: var(--raised); color: var(--text); }
+.xbtn svg.ic { width: 17px; height: 17px; }
+.dbody { flex: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; user-select: text; }
+.msg { max-width: 85%; padding: 8px 12px; border-radius: 14px 14px 14px 4px; background: var(--raised); align-self: flex-start; overflow-wrap: anywhere; white-space: pre-wrap; }
+.msg.me { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: color-mix(in srgb, var(--string-strong) 55%, var(--raised)); }
+.msg.sys { align-self: center; background: none; color: var(--subtle); font-size: 12.5px; text-align: center; }
+.msg small { display: block; color: var(--subtle); font-size: 11px; }
+.chatin { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+.chatin input { flex: 1; min-width: 0; background: var(--night); border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 10px; }
+.empty { color: var(--subtle); font-size: 13px; text-align: center; margin: auto 0; }
+
+/* the native Tools panel sits exactly here */
+#dockHole { flex: none; height: 0; margin: 0 12px; }
+body.tools-on #dockHole { height: 260px; margin-top: 12px; border-radius: var(--r-tile); background: var(--surface); border: 1px solid var(--line); }
+body.tools-on { --dockb: 272px; }
+
+/* ---------- lesson bar ---------- */
+.bar { position: relative; flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 8px 16px 10px; margin-top: 10px;
+  border-top: 1px solid var(--line); background: var(--surface); }
+.linfo { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.linfo img { height: 34px; }
+.linfo > div { min-width: 0; }
+.linfo b { font: 700 16px/1.2 var(--font-display); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linfo div > span { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tprog { display: block; height: 2.5px; width: 150px; background: var(--line); border-radius: 9px; margin-top: 5px; position: relative; overflow: hidden; }
+.tprog i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--string); border-radius: 9px; }
+.icons { display: flex; align-items: flex-start; gap: 4px; }
+.icons .gap { width: 1px; align-self: stretch; background: var(--line); margin: 4px 8px; }
+.ib { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 62px; background: none; border: 0; padding: 0; color: var(--muted); font-size: 11px; font-weight: 500; }
+.ib .disc { position: relative; width: 44px; height: 38px; border-radius: 13px; background: var(--raised); border: 1px solid var(--line); display: grid; place-items: center; color: var(--text);
+  transition: background .12s, border-color .12s; }
+.ib:hover .disc { border-color: var(--line-strong); background: color-mix(in srgb, var(--raised) 80%, var(--text) 8%); }
+.ib[aria-pressed=true] .disc, .ib[aria-expanded=true] .disc { border-color: var(--string); box-shadow: inset 0 -2.5px 0 var(--string); }
+.ib.off .disc { background: var(--string-strong); border-color: var(--string-strong); }
+.ib.off .disc::after { content: ""; position: absolute; width: 26px; height: 2px; background: #fff; transform: rotate(-45deg); border-radius: 2px; }
+.ib .badge { position: absolute; top: -4px; right: 2px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--string-strong); color: #fff; font-size: 11px; font-weight: 700;
+  display: grid; place-items: center; padding: 0 5px; }
+.split { display: flex; align-items: flex-start; }
+.split .ib { width: 50px; }
+.caret { width: 20px; height: 38px; margin-left: -3px; border-radius: 0 13px 13px 0; border: 1px solid var(--line); border-left: 0; background: var(--raised); color: var(--muted);
+  display: grid; place-items: center; padding: 0; font-size: 9px; }
+.caret:hover, .caret[aria-expanded=true] { color: var(--text); border-color: var(--string); }
+.split .ib .disc { border-radius: 13px 0 0 13px; }
+.ib[data-tip]:hover::before, .ib[data-tip]:focus-visible::before { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--night); padding: 4px 9px; border-radius: 7px; font-size: 11.5px; font-weight: 600; white-space: nowrap; z-index: 20; pointer-events: none; }
+body.nolabels .ib .lbl { display: none; }
+.ib .lbl { white-space: nowrap; }
+/* narrower windows: the lesson title gives way first, then the icons tighten */
+@media (max-width: 1180px) { .linfo b, .tprog { display: none; } .linfo img { height: 28px; } .bar { gap: 10px; padding-inline: 10px; } }
+@media (max-width: 940px) { .ib { width: 54px; } .split .ib { width: 46px; } .icons .gap { margin: 4px 3px; } .leave { padding: 0 12px; } }
+.rside { display: flex; justify-content: flex-end; align-items: flex-start; gap: 10px; }
+.leave { height: 38px; padding: 0 16px; border-radius: 13px; border: 0; background: var(--string-strong); color: #fff; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.leave:hover { background: var(--string-ink); }
+.recpill { display: none; align-items: center; gap: 10px; height: 38px; padding: 0 6px 0 12px; border-radius: 13px; background: color-mix(in srgb, var(--string-strong) 22%, var(--raised));
+  border: 1px solid var(--string); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+#recT { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.recpill::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--string-light); animation: blink 1.2s infinite; }
+body[data-rec=asking] .recpill::before { background: var(--subtle); }
+@keyframes blink { 50% { opacity: .25; } }
+body[data-rec=recording] .recpill, body[data-rec=asking] .recpill, body[data-rec=asked] .recpill { display: flex; }
+body[data-rec=recording] #recBtn, body[data-rec=asking] #recBtn, body[data-rec=asked] #recBtn { display: none; }
+body:not([data-rec=recording]) .rec-only { display: none; }
+
+/* popovers: inside the page, anchored to their icon, above the Tools dock when it is open */
+.pop { position: absolute; z-index: 15; bottom: calc(100% + 10px + var(--dockb)); width: 320px; max-height: calc(100vh - 120px - var(--dockb)); overflow: auto;
+  background: var(--raised); border: 1px solid var(--line-strong); border-radius: 18px; padding: 16px; display: none; flex-direction: column; gap: 13px; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); }
+.pop.open { display: flex; }
+.pop h3 { font: 700 16px/1.2 var(--font-display); }
+.pop .meter { color: var(--text); }
+.pop p { color: var(--muted); font-size: 13px; }
+.pop hr { border: 0; border-top: 1px solid var(--line); margin: 0; align-self: stretch; }
+.pop .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.pop.conn { bottom: auto; width: 300px; }
+.menu { display: flex; flex-direction: column; }
+.menu button { display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 9px 8px; border-radius: 10px; text-align: left; }
+.menu button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.menu button:disabled { color: var(--subtle); cursor: default; }
+.menu small { display: block; color: var(--subtle); font-size: 12px; }
+.pop input[type=text] { background: var(--night); border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 10px; }
+
+#toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 40; max-width: min(560px, 90vw); background: var(--raised); border: 1px solid var(--line-strong);
+  border-radius: 14px; padding: 10px 16px; color: var(--text); box-shadow: 0 12px 30px rgba(0, 0, 0, .45); text-align: center; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body data-state="waiting" data-right="" data-role="teacher" data-rec="idle">
+<div class="l-main">
+  <main class="people" id="people" aria-label="People in this lesson">
+    <svg class="pstring" aria-hidden="true"><path id="ppath"/><circle id="pA" r="6"/><circle id="pB" r="6"/></svg>
+    <button class="sknot" id="sknot" type="button" data-pop="conn" aria-haspopup="dialog" aria-expanded="false"><span id="sknotT">Waiting</span></button>
+    <div class="pop conn" id="pop-conn" role="dialog" aria-label="Connection">
+      <h3>The string is your connection</h3>
+      <p id="connP"></p>
+      <div class="kv t-only" id="connKv"></div>
+      <div class="acts"><button class="pill" type="button" id="connFlip">Audio options</button></div>
+    </div>
+
+    <div class="others" id="others">
+      <!-- waiting / could not connect -->
+      <article class="tile wait" id="wait">
+        <div class="face">
+          <div class="waitbox" id="waitBox">
+            <img src="cans/can-large.svg" alt="">
+            <h2 id="waitH">Waiting for the other person to pick up the other can</h2>
+            <p id="waitP">You're in the lesson room. They'll appear here when they join.</p>
+            <ul class="checks">
+              <li id="chkRoom"><i data-i="check"></i><span>Connected to the lesson room</span></li>
+              <li><i data-i="check"></i><span>Your microphone</span><span class="meter"><i data-meter="me"></i></span></li>
+            </ul>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+              <button class="btn ghost sm" type="button" data-act="setup">Check my sound</button>
+              <button class="btn ghost sm" type="button" data-act="tools">Tune up while you wait</button>
+            </div>
+          </div>
+          <div class="waitbox" id="problemBox" hidden>
+            <h2>We couldn't reach the lesson room</h2>
+            <p>Your lesson is still booked. This is usually a short internet hiccup, not something you did. CanDuet keeps trying.</p>
+            <ul class="checks">
+              <li class="num"><i>1</i><span>Check this computer is online: open any website.</span></li>
+              <li class="num"><i>2</i><span>Still stuck? Leave, then press Join lesson again in My lessons.</span></li>
+              <li class="num"><i>3</i><span>Tell the other person, or <button class="link" type="button" data-act="help">get help</button>. They can see the lesson too.</span></li>
+            </ul>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <div class="mine" id="mine">
+      <article class="tile self" id="self" tabindex="0" aria-label="You">
+        <div class="flipper"><div class="face front">
+          <div class="avatar"><span id="selfInit">?</span></div>
+          <video class="cam" autoplay playsinline muted hidden aria-label="Your camera"></video>
+          <div class="label"><span class="nm">You</span><span class="meter"><i data-meter="me"></i></span><span class="off" id="selfOff" hidden>Muted</span></div>
+          <div class="tbtns ctl"><button class="tbtn" type="button" data-pop="mic" data-anchor="micBtn"><i data-i="mic"></i>My sound</button></div>
+        </div></div>
+      </article>
+    </div>
+  </main>
+
+  <aside class="dock-r chat" aria-label="Chat">
+    <div class="dhead"><h3>Chat</h3><button class="xbtn" type="button" data-act="chat" aria-label="Close chat"><i data-i="x"></i></button></div>
+    <div class="dbody" id="chatList" aria-live="polite"><p class="empty" id="chatEmpty">Messages you send here go to everyone in the lesson.</p></div>
+    <form class="chatin" id="chatForm"><input id="chatIn" type="text" maxlength="2000" placeholder="Write a message" aria-label="Message" autocomplete="off"><button class="btn sm" type="submit">Send</button></form>
+  </aside>
+</div>
+
+<div id="dockHole" aria-hidden="true"></div>
+
+<div class="bar" id="bar">
+  <div class="linfo"><img src="cans/can-small.svg" alt="">
+    <div><b id="ltitle">Your lesson</b><span id="ltime"></span><i class="tprog"><i id="lprog"></i></i></div></div>
+
+  <div class="icons" role="toolbar" aria-label="Lesson">
+    <span class="split"><button class="ib" type="button" id="micBtn" data-tip="Mute my microphone (M)" aria-pressed="false"><span class="disc"><i data-i="mic"></i></span><span class="lbl">Mic</span></button><button class="caret" type="button" data-pop="mic" data-anchor="micBtn" aria-label="Microphone options" aria-expanded="false">&#9650;</button></span>
+    <span class="split"><button class="ib" type="button" id="camBtn" data-tip="Turn my camera off (V)" aria-pressed="false"><span class="disc"><i data-i="video"></i></span><span class="lbl">Camera</span></button><button class="caret" type="button" data-pop="cam" data-anchor="camBtn" aria-label="Camera options" aria-expanded="false">&#9650;</button></span>
+    <button class="ib" type="button" id="shareBtn" data-pop="share" data-tip="Share a screen or a second camera" aria-expanded="false"><span class="disc"><i data-i="share"></i></span><span class="lbl">Share</span></button>
+    <span class="gap"></span>
+    <button class="ib" type="button" id="toolsBtn" data-act="tools" data-tip="Tuner, metronome, instrument (T)" aria-pressed="false"><span class="disc"><i data-i="music"></i></span><span class="lbl">Tools</span></button>
+    <button class="ib" type="button" id="boardBtn" data-act="board" data-tip="Shared board for music and notes (B)" aria-pressed="false"><span class="disc"><i data-i="board"></i></span><span class="lbl">Board</span></button>
+    <button class="ib" type="button" id="chatBtn" data-act="chat" data-tip="Chat (C)" aria-pressed="false"><span class="disc"><i data-i="chat"></i><span class="badge" id="chatBadge" hidden></span></span><span class="lbl">Chat</span></button>
+    <button class="ib" type="button" id="recBtn" data-pop="rec" data-tip="Record this lesson (asks first)" aria-expanded="false"><span class="disc"><i data-i="record"></i></span><span class="lbl">Record</span></button>
+    <span class="recpill" role="status"><span id="recT"></span>
+      <button class="pill rec-only" type="button" id="markBtn" data-pop="mark" data-anchor="recBtnPill" title="Add a highlight at this moment (H)"><i data-i="flag" style="vertical-align:-3px"></i> Mark</button>
+      <button class="pill" type="button" data-act="recstop" id="recStop">Stop</button></span>
+  </div>
+
+  <div class="rside">
+    <button class="ib" type="button" id="setBtn" data-pop="set" data-tip="Settings" aria-expanded="false"><span class="disc"><i data-i="settings"></i></span><span class="lbl">Settings</span></button>
+    <button class="leave" type="button" id="leaveBtn" data-pop="leave" aria-expanded="false"><i data-i="leave"></i>Leave</button>
+  </div>
+
+  <!-- popovers -->
+  <div class="pop" id="pop-mic" role="dialog" aria-label="Your microphone">
+    <h3>Your microphone</h3>
+    <div class="meter"><i data-meter="me"></i></div>
+    <div class="opt"><div class="lab">Microphone level <output id="inGainO"></output></div><input type="range" min="0" max="1" step="0.001" id="inGain" aria-label="Microphone level"></div>
+    <div class="line"><span>Hear myself<small>Your own sound in your headphones</small></span><input type="checkbox" class="sw" id="monitor" aria-label="Hear myself"></div>
+    <div class="dev"><span id="inDev"></span><button class="link" type="button" data-act="setup">Change…</button></div>
+    <hr class="t-only"><div class="advgrid t-only" style="margin:0"><button class="pill" type="button" data-act="effects">Reverb…</button></div>
+  </div>
+  <div class="pop" id="pop-cam" role="dialog" aria-label="Your camera">
+    <h3>Your camera</h3>
+    <div class="opt"><label for="camSel">Camera</label><select class="nsel" id="camSel"></select></div>
+    <div class="line"><span>Mirror my own picture<small>Others always see you the right way round</small></span><input type="checkbox" class="sw" id="mirror" checked aria-label="Mirror my own picture"></div>
+    <p class="hint">A second camera for your hands or pedals is under Share.</p>
+  </div>
+  <div class="pop" id="pop-share" role="dialog" aria-label="Share">
+    <h3 id="shareH">Share with the other person</h3>
+    <div class="menu" id="shareMenu"></div>
+  </div>
+  <div class="pop" id="pop-rec" role="dialog" aria-label="Record this lesson">
+    <h3>Record this lesson?</h3>
+    <p id="recAskP">We'll ask everyone first. Recording starts only when everyone says yes, and anyone can stop it. Each of you keeps your own copy on your own computer. Nothing is uploaded.</p>
+    <div class="acts"><button class="pill" type="button" data-act="closepop">Not now</button><button class="btn sm" type="button" data-act="recask">Ask to record</button></div>
+  </div>
+  <form class="pop" id="pop-mark" role="dialog" aria-label="Mark a highlight">
+    <h3>Mark this moment</h3>
+    <div class="opt"><label for="markIn">What happened? (optional)</label><input type="text" id="markIn" maxlength="80" autocomplete="off" placeholder="Good run-through"></div>
+    <div class="acts"><button class="btn sm" type="submit">Save highlight</button></div>
+  </form>
+  <div class="pop" id="pop-set" role="dialog" aria-label="Quick settings">
+    <h3>Quick settings</h3>
+    <div class="opt"><div class="lab">Lesson volume <output id="volO"></output></div><input type="range" min="0" max="1" step="0.001" id="vol" aria-label="Lesson volume"></div>
+    <div class="dev"><span id="outDev"></span><button class="link" type="button" data-act="setup">Change…</button></div>
+    <div class="line"><span>Mute everything I hear</span><input type="checkbox" class="sw" id="recvMute" aria-label="Mute everything I hear"></div>
+    <div class="line t-only"><span>Labels under the icons</span><input type="checkbox" class="sw" id="labels" checked aria-label="Labels under the icons"></div>
+    <hr>
+    <div class="menu">
+      <button type="button" data-act="settings"><i data-i="settings"></i><span>All settings<small>Sound card, recording<span class="t-only">, advanced</span></small></span></button>
+      <button type="button" data-act="setup"><i data-i="headphones"></i><span>Set up your sound again</span></button>
+      <button type="button" data-act="help"><i data-i="help"></i><span>Help<small>Opens tincanstudios.ca/help</small></span></button>
+    </div>
+  </div>
+  <div class="pop" id="pop-leave" role="dialog" aria-label="Leave the lesson" style="width:270px">
+    <h3>Leave the lesson?</h3>
+    <p>You can come back with Join lesson until 15 minutes after it ends.</p>
+    <div class="acts"><button class="pill" type="button" data-act="closepop">Stay</button><button class="btn sm" type="button" data-act="leave">Leave</button></div>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+"use strict";
+(function () {
+  const $ = (s, r) => (r || document).querySelector(s), $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+  const body = document.body, people = $("#people"), others = $("#others");
+  const params = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, "", location.pathname + location.search);
+  const demo = params.get("demo") === "1";
+  const host = window.chrome && window.chrome.webview;   // the CanDuet app
+  const myName = (params.get("name") || "").slice(0, 80);
+
+  // small read-only state for support and automated checks
+  const state = window.canduetLesson = { phase: "starting", peers: [], videoNames: [], sent: 0, flipped: "", localShare: "", remoteShare: "" };
+
+  function send(msg) {
+    if (!host) return;
+    host.postMessage(JSON.stringify(msg));
+    state.sent++;
+  }
+
+  // ---- icons (simple line icons drawn here, so the page needs nothing else) ----
+  const I = {
+    mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>',
+    video: '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+    share: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v6"/>',
+    window: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+    music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    board: '<rect x="3" y="3" width="18" height="14" rx="2"/><path d="m7 13 3-4 3 3 2-2 2 3M8 21l4-4 4 4"/>',
+    chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/>',
+    leave: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+    headphones: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.3c-.7.4-1.1 1-1.1 1.7M12 17h.01"/>',
+    flip: '<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/>',
+    volume: '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>', check: '<path d="m5 12 5 5 9-10"/>', dot: '<circle cx="12" cy="12" r="3"/>',
+    flag: '<path d="M4 22V4s1-1 4-1 5 2 8 2 4-1 4-1v11s-1 1-4 1-5-2-8-2-4 1-4 1"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>'
+  };
+  function icons(root) {
+    $$("i[data-i]", root).forEach((el) => { if (!el.firstChild) el.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (I[el.dataset.i] || "") + "</svg>"; });
+  }
+  icons(document);
+
+  // ---- numbers, the way the app shows them ----
+  const posToGain = (p) => 2 * p * p;                                   // tile and lesson volume: 0..2, skew 0.5
+  const gainToPos = (g) => Math.sqrt(Math.max(0, Math.min(2, g)) / 2);
+  const inPosToGain = (p) => 4 * Math.pow(p, 1 / 0.33);                 // microphone level: 0..4, skew 0.33
+  const inGainToPos = (g) => Math.pow(Math.max(0, Math.min(4, g)) / 4, 0.33);
+  const dbText = (g) => g <= 0.0001 ? "-∞ dB" : (20 * Math.log10(g)).toFixed(1) + " dB";
+  const panText = (v) => Math.abs(v) < 0.01 ? "Centre" : (v < 0 ? "Left " : "Right ") + Math.round(Math.abs(v) * 100);
+  const mmss = (s) => { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  const first = (n) => (n || "").trim().split(/\s+/)[0] || n || "";
+  function quality(ms) {
+    if (!(ms > 0)) return { word: "", key: "" };
+    if (ms < 30) return { word: "great", key: "great" };
+    if (ms < 50) return { word: "good", key: "good" };
+    if (ms < 80) return { word: "okay", key: "slow" };
+    return { word: "slow", key: "slow" };
+  }
+
+  // ---- what the app tells us ----
+  let me = { name: myName, role: "teacher", micOff: false, inGain: 1, monitor: false, recvMute: false, volume: 1, level: 0, inDevice: "", outDevice: "" };
+  let conn = "connecting", lessonInfo = { title: "", startsAt: 0, endsAt: 0, joinedAt: Date.now() };
+  let audioPeers = [], rec = { phase: "idle", secs: 0 }, docks = { tools: false, board: false };
+
+  // ---- people ----
+  const tiles = new Map();   // key -> tile
+  let videos = [];           // [{identity, name, track, share, shareKind}]
+
+  function makeSeg(names, cls) {
+    return '<div class="seg ' + cls + '">' + names.map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join("") + "</div>";
+  }
+
+  function makeTile(name, isAudio) {
+    const t = document.createElement("article");
+    t.className = "tile remote"; t.tabIndex = 0;
+    t.setAttribute("aria-label", name);
+    t.innerHTML = `
+      <div class="flipper">
+        <div class="face front">
+          <div class="avatar"><span></span></div>
+          <video class="main" autoplay playsinline muted hidden></video>
+          <video class="pip" autoplay playsinline muted hidden aria-label="Their camera"></video>
+          <div class="note" hidden></div>
+          <div class="pan ctl"><span>L</span><input type="range" min="-1" max="1" step="0.01" value="0"><span>R</span></div>
+          <div class="vol ctl"><i data-i="volume"></i><input type="range" min="0" max="1" step="0.001"><output></output></div>
+          <div class="label"><span class="nm"></span><span class="meter"><i></i></span><span class="off" hidden>Muted</span></div>
+          <div class="tbtns ctl"><button class="tbtn flipb" type="button"><i data-i="flip"></i>Audio options</button></div>
+        </div>
+        <div class="face back">
+          <header><h3></h3><button class="tbtn flipb" type="button"><i data-i="video"></i>Back to video</button></header>
+          <div class="body">
+            <div class="opt"><div class="lab">Volume <output class="bvolO"></output></div><input type="range" min="0" max="1" step="0.001" class="bvol"><div class="meter" style="color:var(--text)"><i></i></div></div>
+            <div class="opt"><div class="lab">Left / right <output class="bpanO"></output></div><input type="range" min="-1" max="1" step="0.01" class="bpan">
+              <div style="display:flex;gap:8px"><button class="pill bmute" type="button" aria-pressed="false">Mute</button><button class="pill bsolo t-only" type="button" aria-pressed="false" title="Hear only this person (useful in groups)">Solo</button></div></div>
+            <div class="opt"><div class="lab">Sound quality</div>${makeSeg([["auto", "Auto"], ["best", "Best for music"], ["save", "Save data"]], "bq")}
+              <small class="bqhint"></small></div>
+            <div class="opt"><div class="lab">If the sound crackles</div>${makeSeg([["auto", "Auto"], ["faster", "Faster"], ["smoother", "Smoother"]], "bb")}
+              <small>Smoother adds a little delay to hide internet hiccups. Faster does the opposite.</small></div>
+            <details class="adv t-only"><summary>Advanced (for teachers and support)</summary>
+              <div class="advgrid"><button class="pill breset" type="button">Reset smoothing</button><button class="pill danger bremove" type="button">Remove from lesson</button></div>
+              <div class="kv bkv"></div>
+            </details>
+            <p class="hint l-only" style="grid-column:1/-1">Something still sounds wrong? Tell your teacher, or open Help in Settings.</p>
+          </div>
+        </div>
+      </div>`;
+    icons(t);
+    const tile = { name, isAudio, el: t, video: $("video.main", t), pip: $("video.pip", t), avatar: $(".avatar", t), note: $(".note", t),
+                   pan: $(".pan input", t), vol: $(".vol input", t), volOut: $(".vol output", t), meter: $(".label .meter i", t), off: $(".label .off", t),
+                   bvol: $(".bvol", t), bvolO: $(".bvolO", t), bpan: $(".bpan", t), bpanO: $(".bpanO", t), bmeter: $(".back .meter i", t),
+                   bmute: $(".bmute", t), bsolo: $(".bsolo", t), bq: $(".bq", t), bb: $(".bb", t), bkv: $(".bkv", t), bqhint: $(".bqhint", t),
+                   main: null, pipTrack: null, busyUntil: 0 };
+    $(".nm", t).textContent = name;
+    $(".avatar span", t).textContent = (name.trim()[0] || "?").toUpperCase();
+    $(".back h3", t).textContent = first(name) + "'s sound";
+    tile.bqhint.textContent = "What you ask " + first(name) + "'s computer to send. Auto is right almost always.";
+    tile.vol.setAttribute("aria-label", "Volume for " + name);
+    tile.pan.setAttribute("aria-label", "Left or right for " + name);
+    tile.bvol.setAttribute("aria-label", "Volume for " + name);
+    tile.bpan.setAttribute("aria-label", "Left or right for " + name);
+    $$(".flipb", t).forEach((b) => b.setAttribute("aria-label", (b.closest(".back") ? "Back to video for " : "Audio options for ") + name));
+
+    // sliders send at most ~30 times a second, and ignore the app's echo while being moved
+    const pending = {};
+    const queue = (msg) => {
+      const k = msg.t + (msg.k || "");
+      const firstOne = !pending[k];
+      pending[k] = msg;
+      if (firstOne) setTimeout(() => { send(pending[k]); delete pending[k]; }, 33);
+    };
+    const busy = () => { tile.busyUntil = performance.now() + 700; };
+    const onVol = (el) => {
+      busy();
+      const g = posToGain(+el.value);
+      tile.vol.value = tile.bvol.value = el.value;
+      showVol(tile, g);
+      queue({ t: "gain", id: tile.name, v: g });
+    };
+    const onPan = (el) => {
+      busy();
+      tile.pan.value = tile.bpan.value = el.value;
+      showPan(tile, +el.value);
+      queue({ t: "pan", id: tile.name, v: +el.value });
+    };
+    for (const el of [tile.vol, tile.bvol]) {
+      el.addEventListener("input", () => onVol(el));
+      el.addEventListener("dblclick", () => { el.value = gainToPos(1); onVol(el); });
+    }
+    for (const el of [tile.pan, tile.bpan]) {
+      el.addEventListener("input", () => onPan(el));
+      el.addEventListener("dblclick", () => { el.value = 0; onPan(el); });
+    }
+    for (const el of [tile.vol, tile.pan]) {
+      el.addEventListener("pointerdown", () => t.classList.add("dragging"));
+      el.addEventListener("pointerup", () => t.classList.remove("dragging"));
+    }
+    $$(".flipb", t).forEach((b) => b.addEventListener("click", () => flip(state.flipped === tile.name ? "" : tile.name)));
+    t.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target === t && tile.isAudio) flip(state.flipped === tile.name ? "" : tile.name); });
+    tile.bmute.addEventListener("click", () => { busy(); const v = tile.bmute.getAttribute("aria-pressed") !== "true"; tile.bmute.setAttribute("aria-pressed", v); send({ t: "peer", id: tile.name, k: "mute", v }); });
+    tile.bsolo.addEventListener("click", () => { busy(); const v = tile.bsolo.getAttribute("aria-pressed") !== "true"; tile.bsolo.setAttribute("aria-pressed", v); send({ t: "peer", id: tile.name, k: "solo", v }); });
+    for (const [seg, k] of [[tile.bq, "quality"], [tile.bb, "buffer"]]) {
+      seg.addEventListener("click", (e) => {
+        const b = e.target.closest("button"); if (!b) return;
+        busy(); pressSeg(seg, b.dataset.v);
+        send({ t: "peer", id: tile.name, k, v: b.dataset.v });
+      });
+    }
+    $(".breset", t).addEventListener("click", () => send({ t: "peer", id: tile.name, k: "resetBuffer" }));
+    $(".bremove", t).addEventListener("click", (e) => {
+      const b = e.currentTarget;
+      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Press again to remove " + first(tile.name); setTimeout(() => { b.dataset.sure = ""; b.textContent = "Remove from lesson"; }, 4000); return; }
+      send({ t: "peer", id: tile.name, k: "remove" });
+    });
+    return tile;
+  }
+  const pressSeg = (seg, v) => $$("button", seg).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+  function showVol(tile, g) { tile.volOut.textContent = tile.bvolO.textContent = dbText(g); tile.vol.setAttribute("aria-valuetext", dbText(g)); tile.bvol.setAttribute("aria-valuetext", dbText(g)); }
+  function showPan(tile, v) { tile.bpanO.textContent = panText(v); tile.pan.setAttribute("aria-valuetext", panText(v)); tile.bpan.setAttribute("aria-valuetext", panText(v)); }
+
+  function flip(name) {
+    state.flipped = name;
+    for (const tile of tiles.values()) tile.el.classList.toggle("flipped", tile.name === name && tile.isAudio);
+    // with 3 or more people one tile is too small for the options: the flipped one takes the whole area
+    body.toggleAttribute("data-flipall", !!name && tiles.size >= 3);
+    for (const tile of tiles.values()) tile.el.hidden = body.hasAttribute("data-flipall") && tile.name !== name;
+    $("#self").hidden = body.hasAttribute("data-flipall");
+    $("#mine").hidden = body.hasAttribute("data-flipall") || $("#self").parentNode === others;
+    requestAnimationFrame(drawString);
+  }
+
+  // Whose video is whose: by the identity each app told the others (names can repeat: the audio
+  // room renames a second "Sam" to "Sam 2", the video room doesn't); by name only as a fallback.
+  function matchVideos() {
+    const claimed = new Set(audioPeers.map((p) => p.vid).filter(Boolean));
+    const byPeer = new Map();
+    for (const p of audioPeers) {
+      const v = p.vid ? videos.find((x) => x.identity === p.vid) : videos.find((x) => x.name === p.id && !claimed.has(x.identity));
+      if (v) { byPeer.set(p.id, v); claimed.add(v.identity); }
+    }
+    return { byPeer, videoOnly: videos.filter((v) => !claimed.has(v.identity)) };
+  }
+
+  function put(el, track) {
+    if (el._track === track) return;
+    if (el._track) el._track.detach(el);
+    el._track = track || null;
+    if (track) track.attach(el);
+    el.hidden = !track;
+  }
+
+  function render() {
+    const { byPeer, videoOnly } = matchVideos();
+    const keys = audioPeers.map((p) => "a:" + p.id).concat(videoOnly.map((v) => "v:" + v.identity));
+    for (const [k, tile] of tiles) {
+      if (!keys.includes(k)) { put(tile.video, null); put(tile.pip, null); tile.el.remove(); tiles.delete(k); if (state.flipped === tile.name) flip(""); }
+    }
+    keys.forEach((k, i) => {
+      let tile = tiles.get(k);
+      const isAudio = k.startsWith("a:");
+      const v = isAudio ? byPeer.get(k.slice(2)) : videoOnly.find((x) => "v:" + x.identity === k);
+      if (!tile) {
+        tile = makeTile(isAudio ? k.slice(2) : (v && v.name) || "Guest", isAudio);
+        tiles.set(k, tile);
+      }
+      if (others.children[i + 1] !== tile.el) others.insertBefore(tile.el, others.children[i + 1] || null);  // after #wait, before my tile
+      update(tile, v || null);
+    });
+
+    const n = keys.length;
+    const cols = n <= 1 ? 1 : n === 2 ? 2 : Math.ceil(Math.sqrt(n));
+    const rows = Math.max(1, Math.ceil(n / cols));
+    others.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    others.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+    body.toggleAttribute("data-many", n >= 2);
+    // my own tile takes an empty grid spot when there is one (e.g. 3 others in a 2×2 grid)
+    const self = $("#self"), inGrid = n >= 2 && cols * rows > n;
+    if (inGrid && self.parentNode !== others) others.appendChild(self);
+    if (!inGrid && self.parentNode !== $("#mine")) $("#mine").appendChild(self);
+    $("#mine").hidden = inGrid || body.hasAttribute("data-flipall");
+
+    // the room's state decides how the string hangs
+    const dropped = audioPeers.some((p) => p.connected === false);
+    const st = conn === "lost" ? "problem" : n === 0 ? "waiting" : dropped ? "drop" : "live";
+    body.dataset.state = st;
+    $("#wait").hidden = n > 0;
+    $("#waitBox").hidden = st === "problem";
+    $("#problemBox").hidden = st !== "problem";
+    $("#chkRoom").className = conn === "connected" ? "" : "no";
+    $("#chkRoom span").textContent = conn === "connected" ? "Connected to the lesson room" : "Connecting to the lesson room…";
+    state.peers = [...tiles.values()].map((t) => t.name);
+    showConnection();
+    requestAnimationFrame(drawString);
+  }
+
+  function update(tile, v) {
+    const p = tile.isAudio ? audioPeers.find((x) => x.id === tile.name) : null;
+    // a shared view goes large, their camera small in the corner
+    const main = v ? (v.share || v.track) : null;
+    put(tile.video, main);
+    put(tile.pip, v && v.share ? v.track : null);
+    tile.video.classList.toggle("share", !!(v && v.share));
+    tile.avatar.hidden = !!main;
+
+    for (const el of $$("input, button.flipb, .back button", tile.el)) el.disabled = !p;
+    tile.el.classList.toggle("dropped", !!p && p.connected === false);
+    if (!p) { tile.note.hidden = false; tile.note.innerHTML = "<b></b>"; $("b", tile.note).textContent = "Video only"; tile.note.append("Their sound isn't connected yet."); return; }
+    if (p.connected === false) {
+      tile.note.hidden = false; tile.note.innerHTML = "<b></b>";
+      $("b", tile.note).textContent = first(p.id) + "'s connection dropped";
+      tile.note.append("Trying to reconnect. You don't need to do anything.");
+    } else tile.note.hidden = true;
+
+    tile.off.hidden = !p.muted;
+    tile.el.classList.toggle("speaking", p.level > 0.45 && !p.muted && p.connected !== false);
+    tile.meter.style.transform = tile.bmeter.style.transform = `scaleX(${Math.max(0, Math.min(1, p.level || 0))})`;
+    if (performance.now() > tile.busyUntil) {
+      tile.vol.value = tile.bvol.value = gainToPos(p.gain);
+      showVol(tile, p.gain);
+      tile.pan.value = tile.bpan.value = p.pan;
+      showPan(tile, p.pan);
+      tile.bmute.setAttribute("aria-pressed", String(!!p.muted));
+      tile.bsolo.setAttribute("aria-pressed", String(!!p.soloed));
+      pressSeg(tile.bq, p.quality || "auto");
+      pressSeg(tile.bb, p.bufMode || "auto");
+    }
+    const kv = [["Receiving", p.recvFormat || "–"], ["Sending", p.sendFormat || "–"],
+                ["Smoothing", (p.bufferMs != null ? p.bufferMs.toFixed(1) + " ms" : "–") + " · " + (p.bufMode || "auto")],
+                ["Ping", p.pingMs ? Math.round(p.pingMs) + " ms round trip" : "–"], ["Dropped", p.dropped != null ? p.dropped.toFixed(1) + " %" : "–"]];
+    fillKv(tile.bkv, kv);
+  }
+  function fillKv(el, rows) {
+    const html = rows.map(() => "<span></span><b></b>").join("");
+    if (el.childElementCount !== rows.length * 2) el.innerHTML = html;
+    rows.forEach(([k, v], i) => { el.children[2 * i].textContent = k; el.children[2 * i + 1].textContent = v; });
+  }
+
+  // ---- the connection: the pill on the string and its explanation ----
+  function mainPeer() { return audioPeers.find((p) => p.connected !== false) || audioPeers[0] || null; }
+  function showConnection() {
+    const st = body.dataset.state, p = mainPeer(), teacher = me.role === "teacher";
+    const q = quality(p && p.delayMs);
+    let text = { waiting: "Waiting for the other can", problem: "Not connected", drop: "Reconnecting…" }[st];
+    if (st === "live") text = q.word ? (teacher && p.delayMs ? Math.round(p.delayMs) + " ms · " + q.word : q.word[0].toUpperCase() + q.word.slice(1)) : "Connected";
+    $("#sknotT").textContent = text;
+    $("#sknot").dataset.q = q.key;
+    $("#sknot").setAttribute("aria-label", "Connection: " + text);
+    const who = p ? first(p.id) : "the other person";
+    $("#connP").textContent = st === "live" && p && p.delayMs
+      ? `Sound takes about ${Math.round(p.delayMs)} ms to reach ${who}. ` + (p.delayMs < 30 ? "That's like standing a few metres apart: fine for playing together."
+        : p.delayMs < 50 ? "Fine for playing together; very fast pieces may feel a little apart." : "Take turns rather than playing together at the same moment.")
+      : st === "waiting" ? "The string goes tight and red when the other person joins." : st === "drop" ? who + "'s connection dropped. CanDuet is reconnecting."
+      : "CanDuet can't reach the lesson room right now. It keeps trying.";
+    fillKv($("#connKv"), p ? [["Sound, each way", p.delayMs ? Math.round(p.delayMs) + " ms" : "–"], ["Network round trip", p.pingMs ? Math.round(p.pingMs) + " ms" : "–"],
+      ["Smoothing", (p.bufferMs != null ? p.bufferMs.toFixed(1) + " ms" : "–") + " · " + (p.bufMode || "auto")], ["Dropped", p.dropped != null ? p.dropped.toFixed(1) + " %" : "–"]] : []);
+    $("#connFlip").hidden = !p;
+    $("#connFlip").textContent = p ? "Audio options for " + first(p.id) : "";
+  }
+  $("#connFlip").addEventListener("click", () => { const p = mainPeer(); closePops(); if (p) flip(p.id); });
+
+  // ---- the string: joins my tile to the other person; how it hangs shows the connection ----
+  function drawString() {
+    const P = people.getBoundingClientRect();
+    const firstTile = [...tiles.values()].find((t) => !t.el.hidden);
+    const a = firstTile ? firstTile.el : $("#wait"), b = $("#self");
+    const path = $("#ppath");
+    if (!P.width || !a || a.hidden || body.hasAttribute("data-flipall")) { path.setAttribute("d", ""); $("#sknot").hidden = true; $("#pA").setAttribute("r", 0); $("#pB").setAttribute("r", 0); return; }
+    $("#sknot").hidden = false;
+    if (tiles.size >= 2) {
+      // with several people a string would cross someone's tile: just the label, centred at the top
+      path.setAttribute("d", ""); $("#pA").setAttribute("r", 0); $("#pB").setAttribute("r", 0);
+      const k = $("#sknot"); k.style.left = P.width / 2 + "px"; k.style.top = "14px";
+      const pc = $("#pop-conn"); pc.style.left = Math.max(8, P.width / 2 - 150) + "px"; pc.style.top = "34px";
+      return;
+    }
+    $("#pA").setAttribute("r", 6); $("#pB").setAttribute("r", 6);
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(), slack = body.dataset.state === "live" ? 0 : 1;
+    let A, B, c1, c2;
+    if (ra.right <= rb.left + 2 && rb.top - ra.top > 60) {           // side by side, my tile lower: arc over the open corner
+      A = [ra.right - P.left, ra.top - P.top + Math.min(90, ra.height * .2)];
+      B = [rb.left - P.left + rb.width / 2, rb.top - P.top];
+      const w = B[0] - A[0], h = B[1] - A[1];
+      c1 = [A[0] + w * .75, A[1] + h * (slack ? .9 : .05)]; c2 = [B[0], B[1] - h * (slack ? .15 : .7)];
+    } else if (ra.right <= rb.left + 2) {
+      A = [ra.right - P.left, ra.top - P.top + ra.height / 2]; B = [rb.left - P.left, rb.top - P.top + rb.height / 2];
+      c1 = [A[0] + 14, A[1] + (slack ? 60 : 4)]; c2 = [B[0] - 14, B[1] + (slack ? 60 : 4)];
+    } else {
+      A = [ra.left - P.left + ra.width / 2, ra.bottom - P.top]; B = [rb.left - P.left + rb.width / 2, rb.top - P.top];
+      c1 = [A[0] - 30, A[1] + 12]; c2 = [B[0] + 30, B[1] - 12];
+    }
+    path.setAttribute("d", `M${A} C${c1} ${c2} ${B}`);
+    $("#pA").setAttribute("cx", A[0]); $("#pA").setAttribute("cy", A[1]);
+    $("#pB").setAttribute("cx", B[0]); $("#pB").setAttribute("cy", B[1]);
+    const mx = (A[0] + 3 * c1[0] + 3 * c2[0] + B[0]) / 8, my = (A[1] + 3 * c1[1] + 3 * c2[1] + B[1]) / 8;
+    const k = $("#sknot"); k.style.left = mx + "px"; k.style.top = my + "px";
+    const pc = $("#pop-conn"); pc.style.left = Math.max(8, Math.min(P.width - 308, mx - 150)) + "px"; pc.style.top = Math.min(P.height - 200, my + 24) + "px";
+  }
+  new ResizeObserver(() => { drawString(); sendDock(); }).observe(body);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawString);
+
+  // ---- me ----
+  function renderMe() {
+    body.dataset.role = me.role === "learner" ? "learner" : "teacher";
+    $("#selfInit").textContent = ((me.name || "?").trim()[0] || "?").toUpperCase();
+    $("#micBtn").classList.toggle("off", !!me.micOff);
+    $("#micBtn").setAttribute("aria-pressed", String(!!me.micOff));
+    $("#micBtn").dataset.tip = me.micOff ? "Unmute my microphone (M)" : "Mute my microphone (M)";
+    $("#micBtn .lbl").textContent = me.micOff ? "Muted" : "Mic";
+    $("#selfOff").hidden = !me.micOff;
+    const lvl = me.micOff ? 0 : Math.max(0, Math.min(1, me.level || 0));
+    $$("[data-meter=me]").forEach((el) => { el.style.transform = `scaleX(${lvl})`; });
+    if (performance.now() > meBusyUntil) {
+      $("#inGain").value = inGainToPos(me.inGain); $("#inGainO").textContent = dbText(me.inGain);
+      $("#monitor").checked = !!me.monitor;
+      $("#vol").value = gainToPos(me.volume); $("#volO").textContent = dbText(me.volume);
+      $("#recvMute").checked = !!me.recvMute;
+    }
+    $("#inDev").textContent = me.inDevice ? "Microphone: " + me.inDevice : "Microphone";
+    $("#outDev").textContent = me.outDevice ? "Sound out: " + me.outDevice : "Headphones or speakers";
+  }
+  let meBusyUntil = 0;
+  const meBusy = () => { meBusyUntil = performance.now() + 700; };
+  const meQueue = {};
+  function sendSoon(msg) {
+    const firstOne = !meQueue[msg.t];
+    meQueue[msg.t] = msg;
+    if (firstOne) setTimeout(() => { send(meQueue[msg.t]); delete meQueue[msg.t]; }, 33);
+  }
+  $("#inGain").addEventListener("input", (e) => { meBusy(); const g = inPosToGain(+e.target.value); $("#inGainO").textContent = dbText(g); sendSoon({ t: "inGain", v: g }); });
+  $("#inGain").addEventListener("dblclick", (e) => { e.target.value = inGainToPos(1); e.target.dispatchEvent(new Event("input")); });
+  $("#vol").addEventListener("input", (e) => { meBusy(); const g = posToGain(+e.target.value); $("#volO").textContent = dbText(g); sendSoon({ t: "volume", v: g }); });
+  $("#vol").addEventListener("dblclick", (e) => { e.target.value = gainToPos(1); e.target.dispatchEvent(new Event("input")); });
+  $("#monitor").addEventListener("change", (e) => { meBusy(); send({ t: "monitor", v: e.target.checked }); });
+  $("#recvMute").addEventListener("change", (e) => { meBusy(); send({ t: "recvMute", v: e.target.checked }); });
+  $("#labels").addEventListener("change", (e) => { body.classList.toggle("nolabels", !e.target.checked); try { localStorage.setItem("canduet.labels", e.target.checked ? "1" : "0"); } catch (_) {} });
+  try { if (localStorage.getItem("canduet.labels") === "0") { $("#labels").checked = false; body.classList.add("nolabels"); } } catch (_) {}
+
+  // ---- the lesson: title, time ----
+  function renderLesson() {
+    $("#ltitle").textContent = lessonInfo.title || "Your lesson";
+    const now = Date.now();
+    const s = lessonInfo.startsAt, e = lessonInfo.endsAt;
+    if (s && e && e > s) {
+      const total = (e - s) / 1000, done = Math.min(total, Math.max(0, (now - s) / 1000));
+      $("#ltime").textContent = now < s ? "Starts in " + mmss((s - now) / 1000) : mmss(done) + " of " + mmss(total);
+      $("#lprog").style.width = (100 * done / total) + "%";
+    } else {
+      $("#ltime").textContent = mmss((now - (lessonInfo.joinedAt || now)) / 1000);
+      $("#lprog").style.width = "0";
+    }
+    $("#recT").textContent = rec.phase === "recording" ? mmss(rec.secs) : rec.phase === "asked" ? "Record?" : "Asking…";
+    $("#recStop").textContent = rec.phase === "recording" ? "Stop" : "Cancel";
+    body.dataset.rec = rec.phase;
+    $("#toolsBtn").setAttribute("aria-pressed", String(!!docks.tools));
+    $("#boardBtn").setAttribute("aria-pressed", String(!!docks.board));
+    if (body.classList.contains("tools-on") !== !!docks.tools) { body.classList.toggle("tools-on", !!docks.tools); sendDock(); requestAnimationFrame(drawString); }
+  }
+  setInterval(renderLesson, 1000);
+
+  // where the native Tools panel goes, as fractions of the page
+  let lastDock = "";
+  function sendDock() {
+    const W = window.innerWidth || 1, H = window.innerHeight || 1, r = $("#dockHole").getBoundingClientRect();
+    const rect = body.classList.contains("tools-on") ? [r.left / W, r.top / H, r.width / W, r.height / H].map((v) => Math.round(v * 10000) / 10000) : [];
+    const json = JSON.stringify(rect);
+    if (json !== lastDock) { lastDock = json; send({ t: "dock", rect }); }
+  }
+
+  // ---- popovers (inside the page, anchored to their icon) ----
+  function closePops() {
+    $$(".pop.open").forEach((p) => p.classList.remove("open"));
+    $$("[aria-expanded=true]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  }
+  function openPop(btn) {
+    const id = btn.dataset.pop, pop = $("#pop-" + id), was = pop.classList.contains("open");
+    closePops(); if (was) return;
+    if (id === "share") fillShare();
+    if (id === "cam") listCameras();
+    if (id === "mark") { $("#markIn").value = ""; send({ t: "mark", a: "start" }); }
+    pop.classList.add("open"); btn.setAttribute("aria-expanded", "true");
+    if (pop.parentElement.id === "bar") {
+      const bar = $("#bar").getBoundingClientRect();
+      const anchor = btn.dataset.anchor ? ($("#" + btn.dataset.anchor) || btn) : btn;
+      const r = (anchor.offsetParent ? anchor : btn).getBoundingClientRect();
+      pop.style.left = Math.max(8, Math.min(bar.width - pop.offsetWidth - 8, r.left - bar.left + r.width / 2 - pop.offsetWidth / 2)) + "px";
+    }
+    // focus the first real choice (not a slider, which would move with the arrow keys)
+    const f = [...pop.querySelectorAll("input, button, select")].find((x) => x.type !== "range" && !x.disabled && x.offsetParent);
+    if (f) f.focus({ preventScroll: true });
+  }
+
+  // ---- chat ----
+  let unread = 0;
+  function addChat(items) {
+    const list = $("#chatList");
+    for (const m of items) {
+      if (!m || typeof m.text !== "string") continue;
+      const d = document.createElement("div");
+      d.className = "msg" + (m.me ? " me" : "") + (m.sys ? " sys" : "");
+      if (!m.sys) { const s = document.createElement("small"); s.textContent = m.me ? "You" : (m.from || ""); d.append(s); }
+      d.append(document.createTextNode(m.text.slice(0, 2000)));
+      list.append(d);
+      if (!m.me && !m.sys && body.dataset.right !== "chat") unread++;
+    }
+    while (list.childElementCount > 300) list.firstElementChild.remove();
+    $("#chatEmpty").hidden = list.childElementCount > 1;
+    list.scrollTop = list.scrollHeight;
+    showUnread();
+  }
+  function showUnread() { $("#chatBadge").hidden = !unread; $("#chatBadge").textContent = unread > 9 ? "9+" : unread; $("#chatBtn").setAttribute("aria-label", "Chat" + (unread ? ", " + unread + " new" : "")); }
+  $("#chatForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("#chatIn").value.trim();
+    if (!text) return;
+    send({ t: "chat", text: text.slice(0, 2000) });
+    $("#chatIn").value = "";
+    if (demo) addChat([{ me: true, text }]);
+  });
+  function toggleChat(open) {
+    body.dataset.right = open ? "chat" : "";
+    $("#chatBtn").setAttribute("aria-pressed", String(open));
+    if (open) { unread = 0; showUnread(); $("#chatIn").focus(); }
+    requestAnimationFrame(() => { drawString(); sendDock(); });
+  }
+
+  let toastTimer = 0;
+  function toast(text, ms) {
+    $("#toast").textContent = text; $("#toast").hidden = !text;
+    clearTimeout(toastTimer);
+    if (text) toastTimer = setTimeout(() => { $("#toast").hidden = true; }, Math.max(2000, Math.min(15000, ms || 5000)));
+  }
+
+  // ---- clicks ----
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("button");
+    if (!e.target.closest(".pop, [data-pop]")) closePops();
+    if (!t) return;
+    if (t.dataset.pop) return openPop(t);
+    switch (t.dataset.act) {
+      case "tools": closePops(); send({ t: "tools" }); if (demo) { docks.tools = !docks.tools; renderLesson(); } break;
+      case "board": closePops(); send({ t: "board" }); break;
+      case "chat": toggleChat(body.dataset.right !== "chat"); break;
+      case "closepop": closePops(); break;
+      case "recask": closePops(); send({ t: "rec", a: "ask" }); break;
+      case "recstop": closePops(); send({ t: "rec", a: "stop" }); break;
+      case "setup": closePops(); send({ t: "setup" }); break;
+      case "settings": closePops(); send({ t: "settings" }); break;
+      case "effects": closePops(); send({ t: "effects" }); break;
+      case "help": closePops(); send({ t: "help" }); break;
+      case "leave": closePops(); send({ t: "leave" }); break;
+    }
+    if (t.id === "micBtn") { me.micOff = !me.micOff; renderMe(); send({ t: "mic", off: me.micOff }); }
+    if (t.id === "camBtn") toggleCamera();
+  });
+  $("#pop-mark").addEventListener("submit", (e) => { e.preventDefault(); send({ t: "mark", a: "save", label: $("#markIn").value.trim().slice(0, 80) }); closePops(); toast("Highlight saved", 2500); });
+
+  // keyboard: Esc closes, letters toggle (never while typing)
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if ($("#pop-mark").classList.contains("open")) send({ t: "mark", a: "save", label: "" });
+      closePops(); if (state.flipped) flip(""); return;
+    }
+    if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== "range" && e.target.type !== "checkbox" || e.ctrlKey || e.altKey || e.metaKey) return;
+    const k = e.key.toLowerCase();
+    const map = { m: "#micBtn", v: "#camBtn", t: "#toolsBtn", b: "#boardBtn", c: "#chatBtn" };
+    if (map[k]) { e.preventDefault(); $(map[k]).click(); }
+    if (k === "h" && rec.phase === "recording") { e.preventDefault(); openPop($("#markBtn")); }
+  });
+
+  // ---- messages from the app ----
+  function onState(m) {
+    if (Array.isArray(m.peers)) audioPeers = m.peers.filter((p) => p && typeof p.id === "string").slice(0, 32);
+    if (m.me && typeof m.me === "object") me = Object.assign(me, m.me);
+    if (typeof m.conn === "string") conn = m.conn;
+    if (m.lesson && typeof m.lesson === "object") lessonInfo = Object.assign(lessonInfo, m.lesson);
+    if (m.rec && typeof m.rec === "object") rec = Object.assign(rec, m.rec);
+    if (m.docks && typeof m.docks === "object") docks = Object.assign(docks, m.docks);
+    renderMe(); render(); renderLesson();
+  }
+  if (host) {
+    host.addEventListener("message", (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch (_) { return; }
+      if (!m || typeof m !== "object") return;
+      if (m.t === "state") onState(m);
+      else if (m.t === "chat" && Array.isArray(m.items)) addChat(m.items.slice(0, 200));
+      else if (m.t === "toast" && typeof m.text === "string") toast(m.text.slice(0, 400), m.ms);
+      else if (m.t === "flip" && typeof m.id === "string") flip(m.id);
+    });
+  }
+
+  // ---- video (LiveKit): cameras and shared views ----
+  const LK = window.LivekitClient;
+  let room = null, camOn = false, shareTrack = null;
+  const SECOND_CAMERA = "second-camera";
+  const selfVideo = $("#self video");
+
+  function collectVideo() {
+    if (!room) return;
+    const next = [];
+    room.remoteParticipants.forEach((p) => {
+      let cam = null, share = null, shareKind = "";
+      p.trackPublications.forEach((pub) => {
+        if (pub.kind !== "video" || !pub.track || pub.isMuted) return;
+        if (pub.source === LK.Track.Source.ScreenShare) { if (!share) { share = pub.track; shareKind = pub.trackName === SECOND_CAMERA ? "camera" : "screen"; } }
+        else if (pub.source === LK.Track.Source.Camera && !cam) cam = pub.track;
+      });
+      if (cam || share) next.push({ identity: p.identity, name: p.name || "Guest", track: cam, share, shareKind });
+    });
+    videos = next;
+    state.videoNames = next.map((v) => v.name);
+    state.remoteShare = (next.find((v) => v.share) || {}).shareKind || "";
+    render();
+  }
+
+  function showCam() {
+    $("#camBtn").classList.toggle("off", !camOn);
+    $("#camBtn").setAttribute("aria-pressed", String(!camOn));
+    $("#camBtn").dataset.tip = camOn ? "Turn my camera off (V)" : "Turn my camera on (V)";
+    $("#self .avatar").hidden = camOn && !selfVideo.hidden;
+  }
+  async function startCamera(deviceId) {
+    if (!room) return;
+    try {
+      await room.localParticipant.setCameraEnabled(true, deviceId ? { deviceId } : undefined);
+      const pub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+      put(selfVideo, pub && pub.track ? pub.track : null);
+      camOn = !!(pub && pub.track);
+    } catch (e) {
+      camOn = false; put(selfVideo, null);
+      toast(e && e.name === "NotAllowedError"
+        ? "CanDuet isn't allowed to use your camera. Allow it in Windows Settings › Privacy › Camera."
+        : "Your camera couldn't start. Close other apps that use it, or pick another camera.", 8000);
+    }
+    showCam();
+  }
+  async function toggleCamera() {
+    if (demo) { camOn = !camOn; showCam(); return; }
+    if (!room) return;
+    if (camOn) {
+      try { await room.localParticipant.setCameraEnabled(false); } catch (_) {}
+      camOn = false; put(selfVideo, null); showCam();
+    } else {
+      let saved = null; try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
+      await startCamera(saved || undefined);
+    }
+  }
+  async function listCameras() {
+    const sel = $("#camSel");
+    if (!LK) return;
+    let cams = [];
+    try { cams = await LK.Room.getLocalDevices("videoinput", false); } catch (_) {}
+    const active = room ? room.getActiveDevice("videoinput") : "";
+    sel.replaceChildren(...cams.map((c, i) => { const o = document.createElement("option"); o.value = c.deviceId; o.textContent = c.label || "Camera " + (i + 1); o.selected = c.deviceId === active; return o; }));
+    if (!cams.length) { const o = document.createElement("option"); o.textContent = "No camera found"; sel.replaceChildren(o); }
+    sel.disabled = cams.length < 2;
+  }
+  $("#camSel").addEventListener("change", (e) => {
+    try { localStorage.setItem("canduet.camera", e.target.value); } catch (_) {}
+    if (room) room.switchActiveDevice("videoinput", e.target.value).catch(() => {});
+  });
+  $("#mirror").addEventListener("change", (e) => {
+    body.classList.toggle("nomirror", !e.target.checked);
+    try { localStorage.setItem("canduet.mirror", e.target.checked ? "1" : "0"); } catch (_) {}
+  });
+  try { if (localStorage.getItem("canduet.mirror") === "0") { $("#mirror").checked = false; body.classList.add("nomirror"); } } catch (_) {}
+
+  // sharing one extra view (T-044): the screen or a window, or a second camera
+  async function fillShare() {
+    const p = mainPeer();
+    $("#shareH").textContent = "Share with " + (p ? first(p.id) : "the other person");
+    const menu = $("#shareMenu");
+    const item = (icon, title, sub, fn, disabled) => {
+      const b = document.createElement("button"); b.type = "button"; b.disabled = !!disabled;
+      b.innerHTML = `<i data-i="${icon}"></i><span><span class="t"></span><small></small></span>`;
+      $(".t", b).textContent = title; $("small", b).textContent = sub || "";
+      if (fn) b.addEventListener("click", () => { closePops(); fn(); });
+      icons(b); return b;
+    };
+    if (state.localShare) {
+      menu.replaceChildren(item("stop", state.localShare === "screen" ? "Stop sharing my screen" : "Stop sharing my second camera", "", stopShare));
+      return;
+    }
+    const items = [item("share", "My screen or one window", "Sheet music, a website, anything. You pick what to show.", startScreenShare, !room && !demo)];
+    let cams = [];
+    try { if (LK) cams = await LK.Room.getLocalDevices("videoinput", false); } catch (_) {}
+    const active = room ? room.getActiveDevice("videoinput") : "";
+    const extra = cams.filter((c) => c.deviceId !== active);
+    if (extra.length) extra.forEach((c, i) => items.push(item("video", "Second camera: " + (c.label || "Camera " + (i + 2)), "Point it at your hands or pedals", () => startSecondCamera(c.deviceId))));
+    else items.push(item("video", "A second camera", "Plug one in to point it at your hands or pedals", null, true));
+    menu.replaceChildren(...items);
+  }
+  function showShare() {
+    $("#shareBtn").setAttribute("aria-pressed", String(!!state.localShare));
+    $("#shareBtn .lbl").textContent = state.localShare ? "Sharing" : "Share";
+  }
+  async function startScreenShare() {
+    if (!room) return;
+    try {
+      await room.localParticipant.setScreenShareEnabled(true, { audio: false, selfBrowserSurface: "exclude" });
+      if (room.localParticipant.getTrackPublication(LK.Track.Source.ScreenShare)) { state.localShare = "screen"; toast("You're sharing your screen. Press Share again to stop.", 4000); }
+    } catch (e) {
+      if (!e || e.name !== "NotAllowedError") toast("Your screen couldn't be shared. Try again, or share a single window.", 6000);
+    }
+    showShare();
+  }
+  async function startSecondCamera(deviceId) {
+    if (!room) return;
+    try {
+      shareTrack = await LK.createLocalVideoTrack({ deviceId, resolution: LK.VideoPresets.h720.resolution });
+      shareTrack.mediaStreamTrack.addEventListener("ended", stopShare);
+      await room.localParticipant.publishTrack(shareTrack, { source: LK.Track.Source.ScreenShare, name: SECOND_CAMERA, simulcast: true });
+      state.localShare = "camera";
+    } catch (e) {
+      if (shareTrack) { shareTrack.stop(); shareTrack = null; }
+      toast("That camera couldn't start. Close other apps that use it, or pick another one.", 6000);
+    }
+    showShare();
+  }
+  async function stopShare() {
+    try {
+      if (shareTrack) { const t = shareTrack; shareTrack = null; await room.localParticipant.unpublishTrack(t); t.stop(); }
+      else if (room) await room.localParticipant.setScreenShareEnabled(false);
+    } catch (_) {}
+    state.localShare = ""; showShare();
+  }
+
+  // ---- demo: made-up people for design checks in a plain browser ----
+  if (demo) {
+    const n = Math.max(0, Math.min(4, +(params.get("people") || 1)));
+    const names = ["Mia Chen", "Sam", "Alex", "Jordan"];
+    const st = params.get("state") || "live";
+    me = Object.assign(me, { name: "Ms. Rivera", role: params.get("role") === "learner" ? "learner" : "teacher", inGain: 1, volume: 1, monitor: false,
+                             inDevice: "Scarlett 2i2 · Input 1", outDevice: "Scarlett 2i2 · Headphones" });
+    conn = st === "problem" ? "lost" : "connected";
+    lessonInfo = { title: "Piano with Mia", startsAt: Date.now() - 12 * 60000, endsAt: Date.now() + 18 * 60000, joinedAt: Date.now() - 11 * 60000 };
+    const peerList = st === "waiting" || st === "problem" ? [] : names.slice(0, n);
+    audioPeers = peerList.map((id, i) => ({ id, gain: 1, pan: 0, muted: false, soloed: false, connected: !(st === "drop" && i === 0), level: 0.6, delayMs: 18 + i * 9,
+      pingMs: 14, bufferMs: 2.1, bufMode: "auto", quality: "auto", recvFormat: "Opus 256 kbps, stereo", sendFormat: "Opus 256 kbps, mono", dropped: 0 }));
+    rec = params.get("rec") === "1" ? { phase: "recording", secs: 67 } : { phase: "idle", secs: 0 };
+    docks.tools = params.get("tools") === "1";
+    camOn = true; showCam();
+    renderMe(); render(); renderLesson();
+    setInterval(() => {
+      const tt = performance.now() / 1000;
+      audioPeers.forEach((p, i) => { p.level = .35 + .3 * Math.sin(tt * 3 + i); });
+      me.level = .3 + .25 * Math.sin(tt * 2.3);
+      if (rec.phase === "recording") rec.secs += .25;
+      renderMe(); render();
+    }, 250);
+    if (params.get("chat") === "1") { addChat([{ from: "Mia Chen", text: "Is it the G major scale first today?" }, { me: true, text: "Yes, two octaves, hands together. Then bars 9 to 16." }, { from: "Mia Chen", text: "ok!" }]); toggleChat(true); }
+    if (params.get("flip") === "1" && audioPeers[0]) flip(audioPeers[0].id);
+    if (params.get("hover") === "1") body.classList.add("pin");
+    const open = params.get("open");
+    if (open) setTimeout(() => { const b = $(`[data-pop="${open}"]`); if (b) openPop(b); }, 150);
+    return;
+  }
+
+  // ---- connect the video ----
+  if (host) send({ t: "ready" });
+  showCam(); showShare();
+  const sfuUrl = params.get("url") || "", token = params.get("token") || "";
+  if (!LK) { toast("Video couldn't load. Your lesson audio still works.", 10000); return; }
+  if (!sfuUrl && !token) { state.phase = "audio-only"; return; }   // a lesson without video
+  if (!/^wss:\/\//.test(sfuUrl) && !/^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(sfuUrl) || !token) {
+    toast("This video link isn't complete. Your lesson audio still works.", 10000);
+    return;
+  }
+
+  room = new LK.Room({
+    adaptiveStream: true, dynacast: true,
+    videoCaptureDefaults: { resolution: LK.VideoPresets.h720.resolution },
+    publishDefaults: { simulcast: true, videoCodec: "vp8" },
+  });
+  room
+    .on(LK.RoomEvent.TrackSubscribed, collectVideo)
+    .on(LK.RoomEvent.TrackUnsubscribed, collectVideo)
+    .on(LK.RoomEvent.TrackMuted, collectVideo)
+    .on(LK.RoomEvent.TrackUnmuted, collectVideo)
+    .on(LK.RoomEvent.ParticipantConnected, collectVideo)
+    .on(LK.RoomEvent.ParticipantDisconnected, collectVideo)
+    .on(LK.RoomEvent.LocalTrackUnpublished, (pub) => {
+      // also fires when the person presses the browser's own "Stop sharing"
+      if (pub.source === LK.Track.Source.ScreenShare) { if (shareTrack) { shareTrack.stop(); shareTrack = null; } state.localShare = ""; showShare(); }
+    })
+    .on(LK.RoomEvent.Reconnecting, () => toast("Video connection lost. Reconnecting… Your lesson audio is not affected.", 8000))
+    .on(LK.RoomEvent.Reconnected, () => { toast(""); collectVideo(); })
+    .on(LK.RoomEvent.Disconnected, () => { if (state.phase === "connected") toast("Video has ended. Your lesson audio is not affected.", 8000); state.phase = "ended"; });
+
+  room.connect(sfuUrl, token)
+    .then(async () => {
+      state.phase = "connected"; state.myIdentity = room.localParticipant.identity;
+      collectVideo();
+      let saved = null; try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
+      await startCamera(saved || undefined);
+    })
+    .catch(() => { state.phase = "error"; toast("Video couldn't connect. Your lesson audio still works.", 10000); });
+  window.addEventListener("pagehide", () => room.disconnect());
+})();
+</script>
+</body>
+</html>

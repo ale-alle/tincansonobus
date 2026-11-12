@@ -153,6 +153,30 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentPanel)
 };
 
+// The teaching tools as one component: tabs for the tuner, metronome, instrument and summaries.
+// It lives in its own window (ToolsWindow) outside a lesson, and docks under the people in a lesson
+// (T-070, the lesson page leaves a gap for it). openWorkspace empty: no Workspace tab (the lesson bar
+// has its own Board button).
+class ToolsPanel : public Component
+{
+public:
+    ToolsPanel(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
+               std::function<void()> openWorkspace, SummaryHooks summaryHooks);
+    ~ToolsPanel() override;
+
+    void resized() override;
+    void paint(Graphics & g) override;
+
+    void showSummary(const File & summaryFile);
+    void refreshSummaries();
+
+private:
+    std::unique_ptr<TabbedComponent> tabs;
+    SummariesPanel * summaries = nullptr;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ToolsPanel)
+};
+
 class ToolsWindow : public DocumentWindow
 {
 public:
@@ -169,8 +193,7 @@ public:
 
 private:
     std::function<void()> onClose;
-    TabbedComponent * tabs = nullptr;
-    SummariesPanel * summaries = nullptr;
+    ToolsPanel * panel = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ToolsWindow)
 };

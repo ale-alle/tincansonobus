@@ -650,22 +650,53 @@ private:
     TextButton openButton { TRANS("Open the workspace") };
 };
 
+ToolsPanel::ToolsPanel(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
+                       std::function<void()> openWorkspace, SummaryHooks summaryHooks)
+{
+    tabs = std::make_unique<TabbedComponent>(TabbedButtonBar::TabsAtTop);
+    tabs->setTabBarDepth(28);
+    tabs->addTab(TRANS("Tuner"), TinCanTheme::surface, new TunerPanel(processor), true);
+    tabs->addTab(TRANS("Metronome"), TinCanTheme::surface, new MetronomePanel(processor), true);
+    tabs->addTab(TRANS("Instrument"), TinCanTheme::surface, new InstrumentPanel(processor, getDeviceManager), true);
+    if (openWorkspace)
+        tabs->addTab(TRANS("Workspace"), TinCanTheme::surface, new WorkspacePanel(std::move(openWorkspace)), true);
+    summaries = new SummariesPanel(std::move(summaryHooks));
+    tabs->addTab(TRANS("Summaries"), TinCanTheme::surface, summaries, true);
+    addAndMakeVisible(tabs.get());
+}
+
+ToolsPanel::~ToolsPanel() = default;
+
+void ToolsPanel::paint(Graphics & g)
+{
+    g.fillAll(TinCanTheme::surface);
+}
+
+void ToolsPanel::resized()
+{
+    tabs->setBounds(getLocalBounds());
+}
+
+void ToolsPanel::showSummary(const File & summaryFile)
+{
+    tabs->setCurrentTabIndex(tabs->getNumTabs() - 1);
+    summaries->refresh(summaryFile);
+}
+
+void ToolsPanel::refreshSummaries()
+{
+    summaries->refresh();
+}
+
 ToolsWindow::ToolsWindow(SonobusAudioProcessor & processor, std::function<AudioDeviceManager*()> getDeviceManager,
                          std::function<void()> openWorkspace, SummaryHooks summaryHooks, std::function<void()> onCloseFunc)
     : DocumentWindow(TRANS("Teaching tools"), TinCanTheme::surface, DocumentWindow::allButtons),
       onClose(std::move(onCloseFunc))
 {
-    tabs = new TabbedComponent(TabbedButtonBar::TabsAtTop);
-    tabs->setTabBarDepth(28);
-    tabs->addTab(TRANS("Instrument"), TinCanTheme::surface, new InstrumentPanel(processor, getDeviceManager), true);
-    tabs->addTab(TRANS("Tuner"), TinCanTheme::surface, new TunerPanel(processor), true);
-    tabs->addTab(TRANS("Metronome"), TinCanTheme::surface, new MetronomePanel(processor), true);
-    tabs->addTab(TRANS("Workspace"), TinCanTheme::surface, new WorkspacePanel(std::move(openWorkspace)), true);
-    summaries = new SummariesPanel(std::move(summaryHooks));
-    tabs->addTab(TRANS("Summaries"), TinCanTheme::surface, summaries, true);
+    panel = new ToolsPanel(processor, std::move(getDeviceManager), std::move(openWorkspace), std::move(summaryHooks));
 
     setUsingNativeTitleBar(true);
-    setContentOwned(tabs, false);
+    setContentOwned(panel, false);
     setResizable(true, false);
     setResizeLimits(640, 280, 4000, 1200);
     centreWithSize(960, 340);
@@ -684,14 +715,13 @@ void ToolsWindow::closeButtonPressed()
 
 void ToolsWindow::showSummary(const File & summaryFile)
 {
-    tabs->setCurrentTabIndex(tabs->getNumTabs() - 1);
-    summaries->refresh(summaryFile);
+    panel->showSummary(summaryFile);
     toFront(true);
 }
 
 void ToolsWindow::refreshSummaries()
 {
-    summaries->refresh();
+    panel->refreshSummaries();
 }
 
 }

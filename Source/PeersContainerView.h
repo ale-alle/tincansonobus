@@ -14,7 +14,6 @@
 #include "CompressorView.h"
 
 #include "ChannelGroupsView.h"
-#include "TinCanVideoTiles.h"
 
 #include <map>
 
@@ -258,19 +257,6 @@ public:
 
     void setPeerDisplayMode(SonobusAudioProcessor::PeerDisplayMode mode);
 
-    // Tin Can video tiles (prototype): the video page covers the people grid and draws one tile
-    // per person; see TinCanVideoTiles.h
-    void showVideoTiles(std::unique_ptr<TinCan::VideoTilesView> view);
-    void closeVideoTiles();
-    bool hasVideoTiles() const { return mVideoTiles != nullptr; }
-
-    // another person's video identity, from their "canduet-video-1" peer message
-    void setPeerVideoId(const String & userName, const String & identity);
-
-    // asks the editor to tell everyone our own video identity; called when people join and every 10 s
-    std::function<void()> onShareVideoId;
-
-
 protected:
     
     void startLatencyTest(int i);
@@ -297,24 +283,6 @@ protected:
     int getPeerForPoint(Point<int> pos, bool inbetween);
 
     ListenerList<Listener> listeners;
-
-    // ---- video tiles ----
-    class FlipOverlay;
-    void handleTilesMessage(const var & message);
-    void sendTilesState();
-    void setFlipped(const String & name);
-    void positionFlipOverlay();
-    int findPeerIndexByName(const String & name) const;
-    int findViewIndexForPeer(int peerIndex) const;
-
-    std::unique_ptr<TinCan::VideoTilesView> mVideoTiles;
-    std::unique_ptr<FlipOverlay> mFlipOverlay;
-    String mFlippedName;
-    std::map<String, juce::Rectangle<float>> mTileRects;  // fractions of the page, by name
-    std::map<String, String> mPeerVideoIds;               // audio user name -> video identity
-    int mTilesLastPeerCount = -1;
-    int mTilesTicks = 0;
-    juce::Rectangle<int> mGridBounds;
 
     OwnedArray<PeerViewInfo> mPeerViews;
     SonobusAudioProcessor& processor;
