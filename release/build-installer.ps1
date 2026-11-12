@@ -6,12 +6,15 @@
 # The version comes from project(... VERSION x.y.z) in CMakeLists.txt; the script refuses an exe built
 # from another version, so the installer, the app and the site's /app/version.json always agree.
 # Output: release\instoutput\CanDuet-<version>-Setup.exe and its SHA-256 (for the Download page).
-param([switch]$Sign)
+#   release\build-installer.ps1 -Staging      from build-staging\ (TINCAN_API_BASE=https://staging.tincanstudios.ca,
+#                                             docs/OPERATIONS.md "Staging" in the site repo): CanDuet-<version>-Staging-Setup.exe.
+#                                             Same app name and settings folder: a PC has either the staging or the live app.
+param([switch]$Sign, [switch]$Staging)
 $ErrorActionPreference = "Stop"
 
 $release = $PSScriptRoot
 $repo = Split-Path -Parent $release
-$built = Join-Path $repo "build\SonoBus_artefacts\Release\Standalone"
+$built = Join-Path $repo ($(if ($Staging) { "build-staging" } else { "build" }) + "\SonoBus_artefacts\Release\Standalone")
 
 $cmake = Get-Content (Join-Path $repo "CMakeLists.txt") -Raw
 if ($cmake -notmatch 'project\(SonoBus VERSION (\d+\.\d+\.\d+)\)') { throw "no project(SonoBus VERSION x.y.z) in CMakeLists.txt" }
@@ -49,10 +52,11 @@ Copy-Item (Join-Path $page "fonts"), (Join-Path $page "cans") $lesson -Recurse
 
 $out = Join-Path $release "instoutput"
 New-Item -ItemType Directory -Force $out | Out-Null
-$setup = Join-Path $out "CanDuet-$version-Setup.exe"
+$setup = Join-Path $out ("CanDuet-$version" + $(if ($Staging) { "-Staging" } else { "" }) + "-Setup.exe")
 if (Test-Path $setup) { Remove-Item $setup -Confirm:$false }
 
 $isccArgs = @("/Q", "/O$out", "/DSBVERSION=$version")
+if ($Staging) { $isccArgs += "/FCanDuet-$version-Staging-Setup" }   # the file name only; same app inside
 if ($Sign) {
     if (-not $env:CANDUET_CERT_FILE) { throw "-Sign needs `$env:CANDUET_CERT_FILE (and CANDUET_CERT_PASSWORD)" }
     $signtool = "signtool.exe sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 " +
