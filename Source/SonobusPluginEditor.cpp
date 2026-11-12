@@ -2784,6 +2784,7 @@ void SonobusAudioProcessorEditor::handleTinCanURL(const String & urlstr)
 
         if (result.status != TinCan::JoinResult::Ok) {
             safeThis->mMainMessageLabel->setText("", dontSendNotification);
+            if (safeThis->mHomeView) safeThis->mHomeView->reload();
             AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, TRANS("Can't join lesson"), result.getUserMessage(), TRANS("OK"));
             return;
         }
@@ -3747,8 +3748,8 @@ void SonobusAudioProcessorEditor::showEffectsConfig(bool flag)
         
         Rectangle<int> bounds =  dw->getLocalArea(nullptr, mEffectsButton->getScreenBounds());
         Component * parentForBox = dw;
-        if (mLessonView) {
-            // in a lesson the page covers this window: float above it, pointing at the Mic icon
+        if (isCoveredByWebView()) {
+            // a page covers this window: float above it, pointing at the lesson bar's Mic icon
             auto sb = getScreenBounds();
             bounds = Rectangle<int>(sb.getCentreX() - 200, sb.getBottom() - 70, 40, 10);
             parentForBox = nullptr;
@@ -4145,6 +4146,10 @@ void SonobusAudioProcessorEditor::componentParentHierarchyChanged (Component& co
 
 bool SonobusAudioProcessorEditor::keyPressed (const KeyPress & key)
 {
+    // the controls these keys belong to are hidden under the start menu or lesson window (T-071 QA):
+    // typing 'm' there must not mute the microphone without anyone seeing it
+    if (isCoveredByWebView()) return false;
+
     DBG("Got key: " << key.getTextCharacter() << "  isdown: " << (key.isCurrentlyDown() ? 1 : 0) << " keycode: " << key.getKeyCode() << " pcode: " << (int)'p');
 
     mAltReleaseShouldAct = false; // reset alt check
@@ -4177,6 +4182,8 @@ bool SonobusAudioProcessorEditor::keyPressed (const KeyPress & key)
 
 bool SonobusAudioProcessorEditor::keyStateChanged (bool isKeyDown)
 {
+    if (isCoveredByWebView()) return false;
+
     bool pttdown = KeyPress::isKeyCurrentlyDown('T');
     
     if (!pttdown && mPushToTalkKeyDown) {
@@ -4255,7 +4262,7 @@ void SonobusAudioProcessorEditor::showSettings(bool flag)
 
         auto prefbounds = mOptionsView->getPreferredContentBounds();
         // in a lesson the page covers this window, so the box floats as a window of its own
-        Component * parentForBox = mLessonView ? nullptr : dw;
+        Component * parentForBox = isCoveredByWebView() ? nullptr : dw;
 
         defHeight = prefbounds.getHeight();
 
@@ -4279,6 +4286,11 @@ void SonobusAudioProcessorEditor::showSettings(bool flag)
             // point at the lesson bar's Settings icon, bottom right (screen coordinates)
             auto sb = getScreenBounds();
             bounds = Rectangle<int>(sb.getRight() - 150, sb.getBottom() - 70, 40, 10);
+        }
+        else if (isCoveredByWebView()) {
+            // over the start menu (from Set up your sound > All audio settings): near the top, centred
+            auto sb = getScreenBounds();
+            bounds = Rectangle<int>(sb.getCentreX() - 20, sb.getY() + 60, 40, 10);
         }
         DBG("callout bounds: " << bounds.toString());
         settingsCalloutBox = & CallOutBox::launchAsynchronously (std::move(wrap), bounds , parentForBox, false);
@@ -6611,6 +6623,9 @@ void SonobusAudioProcessorEditor::getAllCommands (Array<CommandID>& cmds) {
 
 bool SonobusAudioProcessorEditor::perform (const InvocationInfo& info) {
     bool ret = true;
+
+    // menu and key commands act on SonoBus's own controls, hidden while a page covers the window
+    if (isCoveredByWebView()) return true;
     
     switch (info.commandID) {
         case SonobusCommands::MuteAllInput:

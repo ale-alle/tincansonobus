@@ -10,7 +10,7 @@ namespace TinCan {
 
 static bool isLocalhostHttp(const String & url)
 {
-    if (!url.startsWithIgnoreCase("http://")) return false;
+    if (!url.startsWithIgnoreCase("http://") || url.containsChar('@')) return false;
     auto host = url.substring(7).upToFirstOccurrenceOf("/", false, false).upToFirstOccurrenceOf(":", false, false);
     return host == "localhost" || host == "127.0.0.1";
 }
@@ -18,9 +18,11 @@ static bool isLocalhostHttp(const String & url)
 String getHomePage()
 {
     auto page = SystemStats::getEnvironmentVariable("TINCAN_HOME_PAGE", {}).trim();
-    if (page.startsWithIgnoreCase("https://") || isLocalhostHttp(page))
-        return page.upToFirstOccurrenceOf("#", false, false);
-    return getApiBase() + "/my-lessons";
+    if (!(page.startsWithIgnoreCase("https://") || isLocalhostHttp(page))) page = getApiBase() + "/my-lessons";
+    page = page.upToFirstOccurrenceOf("#", false, false);
+    // the site switches to its app mode only with this mark (src/lib/app.ts): other apps that embed
+    // WebView2 then keep the normal site
+    return page + (page.containsChar('?') ? "&" : "?") + "app=canduet";
 }
 
 // "scheme://host[:port]/" of an address, lower case
@@ -55,26 +57,33 @@ public:
     bool pageAboutToLoad(const String & url) override
     {
         if (isTinCanURL(url)) {
-            // a canduet:// link (the website's Join, if it ever navigates): join here instead
+            // a canduet:// link in the page itself (the website's Join, if it ever navigates): join here
             join(url);
             return false;
         }
         if (url.toLowerCase().startsWith(origin) || url == "about:blank") return true;
-        // anything off the site (Stripe, other sites) opens in the normal browser
-        if (isWebAddress(url)) URL(url).launchInDefaultBrowser();
+
+        if (isWebAddress(url) || url.startsWithIgnoreCase("mailto:")) URL(url).launchInDefaultBrowser();
+        // sent elsewhere before any page of the site showed (a redirect to another host): nothing
+        // would ever appear here, so say so instead of staying blank (QA)
+        if (!loadedOnce) offlineLater();
         return false;
     }
 
     void newWindowAttemptingToLoad(const String & url) override
     {
-        if (isTinCanURL(url)) join(url);
-        else if (isWebAddress(url)) URL(url).launchInDefaultBrowser();
+        // never joins from here: frames can ask for new windows too (QA). Web links go to the browser.
+        if (isWebAddress(url) || url.startsWithIgnoreCase("mailto:")) URL(url).launchInDefaultBrowser();
+    }
+
+    void pageFinishedLoading(const String & url) override
+    {
+        if (url.toLowerCase().startsWith(origin)) loadedOnce = true;
     }
 
     bool pageLoadHadNetworkError(const String &) override
     {
-        SafePointer<HomeView> safe(&owner);
-        MessageManager::callAsync([safe]() { if (safe) safe->showOffline(true); });
+        offlineLater();
         return false;   // no browser error page
     }
 
@@ -92,8 +101,14 @@ public:
             SafePointer<HomeView> safe(&owner);
             MessageManager::callAsync([safe]() { if (safe && safe->hooks.setup) safe->hooks.setup(); });
         }
-        else if (type == "open" && isAllowedPaymentURL(url)) URL(url).launchInDefaultBrowser();
+        else if (type == "open" && url.length() <= 2048
+                 && (isAllowedPaymentURL(url) || (url.toLowerCase().startsWith(origin) && !url.containsAnyOf(" \"'<>\\")))) {
+            // a Stripe page, or a page of the site that isn't part of the start menu (contact, policies)
+            URL(url).launchInDefaultBrowser();
+        }
     }
+
+    void forgetLoaded() { loadedOnce = false; }
 
 private:
     void join(const String & url)
@@ -103,41 +118,56 @@ private:
         MessageManager::callAsync([safe, url]() { if (safe && safe->hooks.join) safe->hooks.join(url); });
     }
 
+    void offlineLater()
+    {
+        SafePointer<HomeView> safe(&owner);
+        MessageManager::callAsync([safe]() { if (safe) safe->showOffline(true); });
+    }
+
     HomeView & owner;
     String origin;
+    bool loadedOnce = false;
 };
 
-// Shown when the site can't be reached: the app still works for setting up sound.
-class HomeView::Offline : public Component
+// Shown when the site can't be shown: the app still works for setting up sound. Tries again by
+// itself every 30 seconds while it is showing.
+class HomeView::Offline : public Component, private Timer
 {
 public:
-    Offline(std::function<void()> retry, std::function<void()> setup)
+    Offline(std::function<void()> retry_, std::function<void()> setup)
+        : retry(std::move(retry_))
     {
-        title.setText(TRANS("You're offline"), dontSendNotification);
-        title.setFont(Font(28.0f, Font::bold));
+        title.setText(TRANS("Your lessons can't be shown right now"), dontSendNotification);
+        title.setFont(Font(26.0f, Font::bold));
         title.setJustificationType(Justification::centred);
         title.setColour(Label::textColourId, TinCanTheme::text);
         addAndMakeVisible(title);
 
-        text.setText(TRANS("CanDuet couldn't reach tincanstudios.ca to show your lessons. Check that this computer "
-                           "is online, then try again. You can set up your sound without the internet."),
+        text.setText(TRANS("CanDuet couldn't load tincanstudios.ca. Check that this computer is online; "
+                           "CanDuet tries again by itself every 30 seconds. You can set up your sound in the meantime."),
                      dontSendNotification);
         text.setFont(Font(16.0f));
         text.setJustificationType(Justification::centred);
         text.setColour(Label::textColourId, TinCanTheme::muted);
         addAndMakeVisible(text);
 
-        retryButton.onClick = std::move(retry);
+        retryButton.onClick = [this]() { if (retry) retry(); };
         setupButton.onClick = std::move(setup);
         addAndMakeVisible(retryButton);
         addAndMakeVisible(setupButton);
+    }
+
+    void visibilityChanged() override
+    {
+        if (isVisible()) startTimer(30000);
+        else stopTimer();
     }
 
     void paint(Graphics & g) override { g.fillAll(TinCanTheme::night); }
 
     void resized() override
     {
-        auto r = getLocalBounds().withSizeKeepingCentre(jmin(520, getWidth() - 40), 240);
+        auto r = getLocalBounds().withSizeKeepingCentre(jmin(560, getWidth() - 40), 240);
         title.setBounds(r.removeFromTop(48));
         r.removeFromTop(8);
         text.setBounds(r.removeFromTop(80));
@@ -147,7 +177,12 @@ public:
         setupButton.setBounds(row.removeFromRight(180));
     }
 
+    void focusFirst() { retryButton.grabKeyboardFocus(); }
+
 private:
+    void timerCallback() override { if (retry) retry(); }
+
+    std::function<void()> retry;
     Label title, text;
     TextButton retryButton { TRANS("Try again") }, setupButton { TRANS("Set up your sound") };
 };
@@ -161,6 +196,9 @@ std::unique_ptr<HomeView> HomeView::create(Hooks hooks)
 HomeView::HomeView(Hooks hooks_) : hooks(std::move(hooks_)), page(getHomePage())
 {
     setOpaque(true);
+    // Tab stays inside the start menu, never in SonoBus's hidden controls underneath (QA)
+    setFocusContainerType(FocusContainerType::keyboardFocusContainer);
+
     browser = std::make_unique<Browser>(makeWebViewOptions(), *this, originOf(page));
     addAndMakeVisible(browser.get());
 
@@ -177,6 +215,7 @@ HomeView::~HomeView() = default;
 void HomeView::reload()
 {
     showOffline(false);
+    browser->forgetLoaded();
     browser->goToURL(page);
 }
 
@@ -184,6 +223,16 @@ void HomeView::showOffline(bool isOffline)
 {
     offline->setVisible(isOffline);
     browser->setVisible(!isOffline);
+    if (isShowing()) {
+        if (isOffline) offline->focusFirst();
+        else browser->grabKeyboardFocus();
+    }
+}
+
+void HomeView::visibilityChanged()
+{
+    // shown again after a lesson: keyboard focus in the page, not in the hidden controls
+    if (isShowing() && browser->isVisible()) browser->grabKeyboardFocus();
 }
 
 void HomeView::paint(Graphics & g)
@@ -204,6 +253,7 @@ class HomeView::Offline : public Component {};
 std::unique_ptr<HomeView> HomeView::create(Hooks) { return nullptr; }
 HomeView::~HomeView() = default;
 void HomeView::reload() {}
+void HomeView::visibilityChanged() {}
 void HomeView::resized() {}
 void HomeView::paint(Graphics &) {}
 

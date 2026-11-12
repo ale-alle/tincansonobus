@@ -12,7 +12,7 @@ namespace TinCan {
 
 static bool isLocalhostHttp(const String & url)
 {
-    if (!url.startsWithIgnoreCase("http://")) return false;
+    if (!url.startsWithIgnoreCase("http://") || url.containsChar('@')) return false;
     auto host = url.substring(7).upToFirstOccurrenceOf("/", false, false).upToFirstOccurrenceOf(":", false, false);
     return host == "localhost" || host == "127.0.0.1";
 }

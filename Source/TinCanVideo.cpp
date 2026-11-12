@@ -16,7 +16,7 @@ static bool isTokenChar(juce_wchar c)
 
 static bool isLocalhostURL(const String & url, const String & scheme)
 {
-    if (!url.startsWithIgnoreCase(scheme)) return false;
+    if (!url.startsWithIgnoreCase(scheme) || url.containsChar('@')) return false;
     auto host = url.substring(scheme.length()).upToFirstOccurrenceOf("/", false, false)
                    .upToFirstOccurrenceOf(":", false, false);
     return host == "localhost" || host == "127.0.0.1";

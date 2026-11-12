@@ -587,6 +587,9 @@ private:
     // T-071: the start menu (the website's sign-in and My lessons) whenever we're not in a lesson
     std::unique_ptr<TinCan::HomeView> mHomeView;
     void createHomeView();
+    // a web page (the lesson window or the start menu) covers the window: anything drawn inside it,
+    // and the hidden SonoBus controls' shortcuts, must stay out of the way
+    bool isCoveredByWebView() const { return mLessonView != nullptr || (mHomeView != nullptr && mHomeView->isVisible()); }
     TinCan::LessonView::Hooks makeLessonHooks();
     double mMarkPressedAt = -1.0;   // recording time when Mark was pressed in the lesson window
     String mVideoIdentity;  // our own LiveKit identity in this lesson, shared with the others (video tiles)

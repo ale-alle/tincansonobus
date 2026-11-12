@@ -16,13 +16,14 @@
 // ticket the website already uses.
 //
 // The web view only shows pages of that site. Other links (Stripe checkout, emails, anything else)
-// open in the person's normal browser. If the site can't be reached, a native "You're offline" screen
+// open in the person's normal browser. If the site can't be shown, a native screen (retrying every 30 s)
 // offers Try again and Set up your sound.
 //
 // Messages from the site's pages (src/lib/app.ts in the website repo):
 //   {"t":"join","url":"canduet://join?ticket=…"}   join this lesson
 //   {"t":"setup"}                                  open Set up your sound
-//   {"t":"open","url":"https://checkout.stripe.com/…"}   Stripe pages only, in the normal browser
+//   {"t":"open","url":…}   in the normal browser: a Stripe page, or a page of the site that isn't
+//                             part of the start menu (contact, policies)
 namespace TinCan {
 
 // TINCAN_HOME_PAGE (https, or http to localhost, for development), else <api base>/my-lessons
@@ -49,6 +50,7 @@ public:
 
     void resized() override;
     void paint(Graphics & g) override;
+    void visibilityChanged() override;
 
 private:
     class Browser;
