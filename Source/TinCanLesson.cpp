@@ -89,6 +89,8 @@ LessonView::LessonView(SonobusAudioProcessor & p, std::unique_ptr<VideoTilesView
         chatIndex = events.size();
     }
     page->onMessage = [this](const var & message) { handleMessage(message); };
+    // MIDI notes for lesson modules: Practice mode only for now, so lessons don't keep the tap on (QA)
+    if (!info.practice) hooks.noteShare = nullptr;
     if (hooks.noteShare) hooks.noteShare->addListener(this);
     addAndMakeVisible(page.get());
     startTimer(100);
@@ -340,19 +342,21 @@ void LessonView::sendState()
 
 void LessonView::notesArrived(const std::vector<NoteEvent> & events)
 {
-    // for lesson modules in the page (T-075): [type, channel, note, value, source]
-    Array<var> list;
-    for (auto & ev : events) {
-        if (list.size() >= 256) break;
-        Array<var> e;
-        e.add((int) ev.type); e.add((int) ev.channel); e.add((int) ev.note); e.add((int) ev.value); e.add((int) ev.source);
-        list.add(var(e));
+    // for lesson modules in the page (T-075): [type, channel, note, value, source], 256 per message,
+    // all of them (a dropped note-off would leave a module's key held)
+    for (size_t i = 0; i < events.size(); i += 256) {
+        Array<var> list;
+        for (size_t k = i; k < events.size() && k < i + 256; ++k) {
+            const auto & ev = events[k];
+            Array<var> e;
+            e.add((int) ev.type); e.add((int) ev.channel); e.add((int) ev.note); e.add((int) ev.value); e.add((int) ev.source);
+            list.add(var(e));
+        }
+        DynamicObject::Ptr msg = new DynamicObject();
+        msg->setProperty("t", "notes");
+        msg->setProperty("e", list);
+        page->send(var(msg.get()));
     }
-    if (list.isEmpty()) return;
-    DynamicObject::Ptr msg = new DynamicObject();
-    msg->setProperty("t", "notes");
-    msg->setProperty("e", list);
-    page->send(var(msg.get()));
 }
 
 void LessonView::sendNewChat()

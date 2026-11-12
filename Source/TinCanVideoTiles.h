@@ -51,6 +51,7 @@ public:
 
 private:
     VideoTilesView(const Options & options, const String & origin);
+    bool isOwnPage(const String & url) const;
 
     String origin;
 

@@ -40,8 +40,12 @@ $stage = Join-Path $release "CanDuet"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force -Confirm:$false }
 New-Item -ItemType Directory $stage | Out-Null
 Copy-Item $exe, (Join-Path $built "WebView2Loader.dll") $stage
-# Practice mode's own copy of the lesson page (T-075)
-Copy-Item (Join-Path $built "lesson") (Join-Path $stage "lesson") -Recurse
+# Practice mode's own copy of the lesson page (T-075), straight from video-page\ so an edit to the
+# page alone (no relink) or a removed font can't ship stale
+$lesson = New-Item -ItemType Directory (Join-Path $stage "lesson")
+$page = Join-Path $repo "video-page"
+Copy-Item (Join-Path $page "lesson.html") $lesson
+Copy-Item (Join-Path $page "fonts"), (Join-Path $page "cans") $lesson -Recurse
 
 $out = Join-Path $release "instoutput"
 New-Item -ItemType Directory -Force $out | Out-Null

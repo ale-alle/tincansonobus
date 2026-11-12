@@ -13,8 +13,9 @@
      (kept for lesson modules later), no string, Share or Chat. The app loads its own copy of this page
      for it (next to CanDuet.exe, in lesson\), so it works without the internet.
      The app also sends the MIDI notes it sees: {"t":"notes","e":[[type,channel,note,value,source],…]}
-     (type 0 on, 1 off, 2 pedal, 3 all notes off, 4 all sound off, 5 reset; source 0 MIDI input, 1 mouse,
-     2 the other person). The page passes them on as a "canduet-notes" event for lesson modules.
+     (type 0 on, 1 off, 2 pedal, 3 all notes off, 4 all sound off, 5 reset; source 0 MIDI input, 2 the
+     other person's shared keys; keys clicked on the screen aren't sent). Practice mode only, for now. The
+     page passes them on as a "canduet-notes" event for lesson modules.
      #demo=1 shows made-up people without the app or a video server, for design checks:
        &people=0..4  &role=teacher|learner  &state=live|waiting|problem|drop  &open=mic|cam|share|rec|set|leave|conn
        &flip=1  &chat=1  &tools=1  &rec=1  &hover=1
@@ -444,7 +445,8 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     body.dataset.mode = "practice";
     $("#leaveBtn").lastChild.textContent = "End practice";
     $("#pop-leave h3").textContent = "End practice?";
-    $("#pop-leave p").textContent = "Your recordings and highlights stay in Tools › Summaries.";
+    $("#pop-leave").setAttribute("aria-label", "End practice");
+    $("#pop-leave p").textContent = "A recording that's still going stops and is saved. Your recordings and highlights stay in Tools › Summaries.";
     $("#pop-leave [data-act=leave]").textContent = "End practice";
     $("#pop-rec h3").textContent = "Record your practice?";
     $("#recAskP").textContent = "It's saved on this computer only. Mark the good moments as you go; everything shows up in Tools › Summaries.";
@@ -1011,7 +1013,9 @@ body:not([data-rec=recording]) .rec-only { display: none; }
       else if (m.t === "chat" && Array.isArray(m.items)) addChat(m.items.slice(0, 200));
       else if (m.t === "toast" && typeof m.text === "string") toast(m.text.slice(0, 400), m.ms);
       else if (m.t === "notes" && Array.isArray(m.e)) {
-        const events = m.e.slice(0, 256).filter((x) => Array.isArray(x) && x.length === 5 && x.every((v) => Number.isInteger(v)))
+        const ok = ([type, channel, note, value, source]) => type >= 0 && type <= 5 && channel >= 0 && channel <= 15
+          && note >= 0 && note <= 127 && value >= 0 && value <= 127 && source >= 0 && source <= 2;
+        const events = m.e.slice(0, 256).filter((x) => Array.isArray(x) && x.length === 5 && x.every((v) => Number.isInteger(v)) && ok(x))
           .map(([type, channel, note, value, source]) => ({ type, channel, note, value, source }));
         state.notes = (state.notes || 0) + events.length;
         if (events.length) window.dispatchEvent(new CustomEvent("canduet-notes", { detail: events }));
@@ -1052,20 +1056,33 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   }
   // Practice mode: the camera straight from the browser engine, no video room (T-075)
   let localStream = null;
+  let camSeq = 0;   // the newest start wins; an older one that finishes late is stopped (QA)
   function stopLocalCamera() {
     if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
     selfVideo.srcObject = null;
     selfVideo.hidden = true;
   }
   async function startLocalCamera(deviceId) {
+    const my = ++camSeq;
     stopLocalCamera();
+    const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    const open = (id) => navigator.mediaDevices.getUserMedia({ audio: false, video: id ? { ...size, deviceId: { exact: id } } : size });
     try {
-      const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { ...size, deviceId: { exact: deviceId } } : size });
+      let stream;
+      try { stream = await open(deviceId); }
+      catch (e) {
+        // the remembered camera was unplugged or replaced: forget it and take any camera
+        if (!deviceId || !e || (e.name !== "OverconstrainedError" && e.name !== "NotFoundError")) throw e;
+        try { localStorage.removeItem("canduet.camera"); } catch (_) {}
+        stream = await open(undefined);
+      }
+      if (my !== camSeq) { stream.getTracks().forEach((t) => t.stop()); return; }
+      localStream = stream;
       selfVideo.srcObject = localStream;
       selfVideo.hidden = false;
       camOn = true;
     } catch (e) {
+      if (my !== camSeq) return;
       camOn = false;
       toast(e && e.name === "NotAllowedError"
         ? "CanDuet isn't allowed to use your camera. Allow it in Windows Settings › Privacy › Camera."
@@ -1094,7 +1111,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   async function toggleCamera() {
     if (demo) { camOn = !camOn; showCam(); return; }
     if (practice) {
-      if (camOn) { stopLocalCamera(); camOn = false; showCam(); return; }
+      if (camOn) { camSeq++; stopLocalCamera(); camOn = false; showCam(); return; }
       let saved = null; try { saved = localStorage.getItem("canduet.camera"); } catch (_) {}
       return startLocalCamera(saved || undefined);
     }

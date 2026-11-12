@@ -79,9 +79,17 @@ std::unique_ptr<VideoTilesView> VideoTilesView::create(const String & page, cons
     return view;
 }
 
+bool VideoTilesView::isOwnPage(const String & url) const
+{
+    // a page on disk: Chromium and JUCE escape paths differently (%3A, ~), so compare them unescaped
+    if (origin.startsWithIgnoreCase("file:"))
+        return URL::removeEscapeChars(url).toLowerCase().startsWith(URL::removeEscapeChars(origin).toLowerCase());
+    return url.startsWith(origin);
+}
+
 bool VideoTilesView::pageAboutToLoad(const String & newURL)
 {
-    return newURL.startsWith(origin) || newURL == "about:blank";
+    return isOwnPage(newURL) || newURL == "about:blank";
 }
 
 void VideoTilesView::send(const var & message)
@@ -92,7 +100,7 @@ void VideoTilesView::send(const var & message)
 void VideoTilesView::webMessageReceived(const String & sourceURL, const String & message)
 {
     // only our own page may move sliders
-    if (!sourceURL.startsWith(origin) || message.length() > 16384) return;
+    if (!isOwnPage(sourceURL) || message.length() > 16384) return;
 
     var parsed;
     if (JSON::parse(message, parsed).failed() || !parsed.isObject()) return;

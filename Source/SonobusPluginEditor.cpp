@@ -3448,6 +3448,12 @@ void SonobusAudioProcessorEditor::showWorkspace()
 void SonobusAudioProcessorEditor::closeLessonVideo()
 {
     if (mNoteShare) mNoteShare->lessonEnded();
+    if (mLessonView && mLessonView->isPractice() && (processor.isRecordingToFile() || mRecordingConsent.getPhase() != TinCan::RecordingConsent::Phase::Idle)) {
+        // practice has no room to leave, so nothing else would stop it (QA): stop and save it now,
+        // while the summary can still be titled "Practice"
+        applyRecording(mRecordingConsent.stop(), RecordingCause::Local);
+        stopLocalRecording();
+    }
     if (mLessonView) {
         mLessonView.reset();
         mMarkPressedAt = -1.0;
@@ -3481,6 +3487,12 @@ void SonobusAudioProcessorEditor::startPractice()
     // on your own: the lesson window without a lesson room or video, from the app's own copy of the
     // page, so it works offline. Tools, recordings and highlights work as in a lesson.
     if (mLessonView || mTicketRedeemer) return;
+    if (processor.isConnectedToServer() && processor.getCurrentJoinedGroup().isNotEmpty()) {
+        // still in a lesson room (e.g. just leaving): practice would share the mic with them (QA)
+        AlertWindow::showMessageBoxAsync(AlertWindow::InfoIcon, TRANS("Practice"),
+                                         TRANS("Leave your lesson first, then press Practise again."), TRANS("OK"));
+        return;
+    }
 
     TinCan::LessonInfo info;
     info.title = TRANS("Practice");
@@ -3500,7 +3512,10 @@ void SonobusAudioProcessorEditor::startPractice()
     mLessonView = TinCan::LessonView::create(processor, TinCan::VideoInfo(), info, std::move(hooks));
     if (!mLessonView) {
         AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, TRANS("Practice"),
-                                         TRANS("Practice mode couldn't start: CanDuet's lesson page is missing. Reinstall CanDuet."), TRANS("OK"));
+                                         TinCan::getPracticePage().isEmpty()
+                                             ? TRANS("Practice mode couldn't start: CanDuet's lesson page is missing. Reinstall CanDuet.")
+                                             : TRANS("Practice mode couldn't start. Restart CanDuet and try again."),
+                                         TRANS("OK"));
         return;
     }
     showToolsWindow(false);
