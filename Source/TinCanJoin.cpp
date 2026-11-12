@@ -142,7 +142,7 @@ JoinResult parseRedeemResponse(int httpStatus, const String & body)
     // video is optional: a missing or malformed "video" never blocks joining the audio room
     result.video = parseVideoInfo(json);
     // optional (T-070): "role" is "teacher" or "learner"; times are ISO 8601. Anything odd is ignored.
-    result.teacher = json.getProperty("role", var()).toString() != "learner";
+    auto role = json.getProperty("role", var()).toString();
     auto starts = Time::fromISO8601(json.getProperty("startsAt", var()).toString().substring(0, 40));
     auto ends = Time::fromISO8601(json.getProperty("endsAt", var()).toString().substring(0, 40));
     if (starts.toMilliseconds() > 0 && ends.toMilliseconds() > starts.toMilliseconds()
@@ -150,6 +150,9 @@ JoinResult parseRedeemResponse(int httpStatus, const String & body)
         result.startsAtMs = starts.toMilliseconds();
         result.endsAtMs = ends.toMilliseconds();
     }
+    // teacher controls only for "teacher", or for a server too old to send roles or times (QA: a
+    // newer server without the role, or an unknown value, gets the learner's simpler controls)
+    result.teacher = role == "teacher" || (role.isEmpty() && result.startsAtMs == 0);
     result.status = JoinResult::Ok;
     return result;
 }

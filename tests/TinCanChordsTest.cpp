@@ -43,6 +43,11 @@ void runChordsTests()
     CHECK(name({ 60, 64, 67, 69 }) == "C6");
     CHECK(name({ 57, 60, 64, 67 }) == "Am7");
 
+    // first inversions that look like sixth chords without a fifth (QA): only sevenths drop the fifth
+    CHECK(name({ 60, 64, 69 }) == "Am/C");
+    CHECK(name({ 60, 63, 69 }) == "Adim/C");
+    CHECK(name({ 60, 62, 64 }).empty());
+
     // a seventh without its fifth
     CHECK(name({ 48, 52, 58 }) == "C7");
     CHECK(name({ 60, 64, 71 }) == "Cmaj7");

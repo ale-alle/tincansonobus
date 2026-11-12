@@ -577,6 +577,9 @@ private:
     // the tools and the lesson window, so it outlives the instrument panels that listen to it.
     std::unique_ptr<TinCan::NoteShare> mNoteShare;
     TinCan::NoteShare & getNoteShare();
+    CriticalSection mNoteMsgLock;              // shared keys arriving from the network thread
+    StringArray mNoteMsgFrom, mNoteMsgPayload;
+    bool mNoteMsgPosted = false;
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
     // T-070: the lesson window (one web page over the whole main window) while in a lesson
     std::unique_ptr<TinCan::LessonView> mLessonView;

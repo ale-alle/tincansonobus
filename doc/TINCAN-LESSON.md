@@ -25,8 +25,8 @@ Stage 1 of the CanDuet redesign (decision D-028 in the tincanstudios-site repo; 
 | The page | `video-page/lesson.html`, served by the website at `/app/video/lesson.html` next to the video page. Fonts (Inter, Bricolage Grotesque, OFL) and can drawings sit beside it. |
 | The app side | `Source/TinCanLesson.{h,cpp}` (`TinCan::LessonView`): owns the WebView2 page, sends state about 10 times a second, and carries out the page's requests. The message list is in the header. |
 | Plain rules | `Source/TinCanLessonRules.{h,cpp}`: what Auto/Faster/Smoother and Auto/Best/Save mean for the engine. Covered by `TinCanTests`. |
-| Tools | `TinCan::ToolsPanel` (Tuner, Metronome, Instrument, Summaries) docks into the gap the page leaves for it. Outside a lesson the same panel lives in the Teaching tools window. |
-| Join | `TinCan::parseRedeemResponse` reads the optional `role` and `startsAt`/`endsAt`. Older servers send neither: the person then gets the teacher's controls and a plain elapsed time. |
+| Tools | `TinCan::ToolsPanel` docks into the gap the page leaves for it. Outside a lesson the same panel lives in the Teaching tools window. The tabs are now Tuner, Metronome, Instrument, Summaries (Instrument used to come first), plus Workspace in the window only. |
+| Join | `TinCan::parseRedeemResponse` reads the optional `role` and `startsAt`/`endsAt`. Teacher controls go to `role: "teacher"`, or to a server too old to send roles or times. A server that sends times without a role, or an unknown role, gives the learner's controls. So apply the database migration before deploying the rooms-worker. |
 
 WebView2 draws over anything JUCE draws inside the main window. That gives three rules:
 - Everything that floats is in the page.
@@ -36,7 +36,9 @@ WebView2 draws over anything JUCE draws inside the main window. That gives three
 Nothing was removed from the audio engine. Without WebView2 the app falls back to SonoBus's window, with the "Video needs WebView2" window.
 
 ## Not in stage 1
-- The Settings panel docked on the right, and EQ/compressor/push-to-talk from the Mic menu: T-072. They're still reachable through All settings and SonoBus's window, which `TINCAN_VIDEO_WINDOW=1` brings back for development.
+- The Settings panel docked on the right, and EQ/compressor/push-to-talk from the Mic menu: T-072.
+- **Can't be reached during a lesson yet** (they were in SonoBus's window, and aren't in All settings): the soundboard, playing a file into the lesson, the per-person latency test, per-person effects (EQ, compressor), send channels, input pan and channel groups. They're planned for Settings › Advanced (T-072). Until then they're available outside a lesson, or in a lesson with `TINCAN_VIDEO_WINDOW=1` (development only).
+- The connection: a short network drop keeps the lesson window open and shows "We couldn't reach the lesson room" while CanDuet rejoins by itself; Leave stops the retries.
 - Board in the large spot: the board still opens in its own window.
 - Practise on your own, computer sound and French: T-073.
 
@@ -56,10 +58,10 @@ For design checks without the app, open `lesson.html#demo=1` in a browser. The o
 
 ## Sharing keys and chord names (T-074)
 - **Share my keys** (Tools › Instrument): while on, your MIDI keyboard and the keys you click light up on everyone else's Instrument view, in red with your name. It's off until you switch it on, and switches off when the lesson ends.
-- **Show … keys** is on by default, so nobody has to find a setting first. Untick it to hide them. When someone starts sharing, the others get a notice: "Ms Rivera is sharing their keys. Open Tools, then Instrument, to see them."
+- **Show … keys** is on by default, so nobody has to find a setting first. One person's keys show at a time: whoever started first, until they stop or go quiet for 4 seconds. The notice comes once per person per lesson. Untick it to hide them. When someone starts sharing, the others get a notice: "Ms Rivera is sharing their keys. Open Tools, then Instrument, to see them."
 - It only lights keys. The sound already comes through the lesson audio, so nothing is played twice.
 - **Chord name:** above the keyboard, for the keys you hold ("Am7", "G7/B", "Csus4"), and for the shared keys ("Ms Rivera: G7"). It follows the Flats and transposing settings. Notes that don't make a known chord show no name rather than a wrong one.
-- **How it travels:** small text messages on the lesson's private peer channel (`TinCan::NoteWire`, tag `canduet-notes-1`). Notes are sent as they happen, at most 30 batches a second. A snapshot of the held keys goes out once a second, so a lost message never leaves a key stuck. If nothing arrives for 4 seconds, the other person's keys are cleared.
+- **How it travels:** small text messages on the lesson's private peer channel (`TinCan::NoteWire`, tag `canduet-notes-1`). Notes are sent as they happen, checked 30 times a second, at most 64 notes per message. A snapshot of the held keys goes out once a second, so a lost message never leaves a key stuck. If nothing arrives for 4 seconds, the other person's keys are cleared.
 - **Code:**
   - `Source/TinCanNoteShare.{h,cpp}`: one reader for the MIDI input, plus sending and receiving.
   - `NoteWire` in `TinCanNotes`.

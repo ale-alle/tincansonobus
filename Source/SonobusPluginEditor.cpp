@@ -1782,13 +1782,32 @@ void SonobusAudioProcessorEditor::sbChatEventReceived(SonobusAudioProcessor *com
     }
 
     if (mesg.tags == TinCan::NoteWire::Tag) {
-        // shared keys (T-074); arrives off the message thread
-        auto from = mesg.from;
-        auto payload = mesg.message.substring(0, TinCan::NoteWire::MaxPayload + 1);
-        Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
-        MessageManager::callAsync([safeThis, from, payload]() {
-            if (safeThis) safeThis->getNoteShare().receive(from, payload);
-        });
+        // shared keys (T-074); arrives off the message thread. Queued with a cap, and drained by one
+        // async call, so a peer sending too much can't flood the message thread (QA).
+        bool post = false;
+        {
+            const ScopedLock sl(mNoteMsgLock);
+            if (mNoteMsgFrom.size() < 256) {
+                mNoteMsgFrom.add(mesg.from);
+                mNoteMsgPayload.add(mesg.message.substring(0, TinCan::NoteWire::MaxPayload + 1));
+            }
+            post = !mNoteMsgPosted;
+            mNoteMsgPosted = true;
+        }
+        if (post) {
+            Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+            MessageManager::callAsync([safeThis]() {
+                if (!safeThis) return;
+                StringArray from, payload;
+                {
+                    const ScopedLock sl(safeThis->mNoteMsgLock);
+                    from.swapWith(safeThis->mNoteMsgFrom);
+                    payload.swapWith(safeThis->mNoteMsgPayload);
+                    safeThis->mNoteMsgPosted = false;
+                }
+                for (int i = 0; i < from.size(); ++i) safeThis->getNoteShare().receive(from[i], payload[i]);
+            });
+        }
         return;
     }
 
@@ -4712,7 +4731,10 @@ void SonobusAudioProcessorEditor::handleAsyncUpdate()
             updateState();
         }
         else if (ev.type == ClientEvent::DisconnectEvent) {
-            if (!mRetryingWithNewName) closeLessonVideo();
+            // a short network drop: the processor rejoins by itself, so the lesson window stays and
+            // shows "We couldn't reach the lesson room" until then (Leave stops the retries)
+            bool recovering = mLessonView && processor.isRecoveringFromServerLoss();
+            if (!mRetryingWithNewName && !recovering) closeLessonVideo();
             applyRecording(mRecordingConsent.stop(), RecordingCause::Local);
             String statstr;
             if (ev.success) {

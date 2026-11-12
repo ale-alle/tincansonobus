@@ -112,6 +112,7 @@ private:
     int chatIndex = 0;
     int64 joinedAtMs = 0;
     bool everConnected = false;
+    float monitorLevel = 1.0f;   // "Hear myself" level to go back to
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LessonView)
 };

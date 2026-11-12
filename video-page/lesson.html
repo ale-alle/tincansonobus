@@ -282,7 +282,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
-<body data-state="waiting" data-right="" data-role="teacher" data-rec="idle">
+<body data-state="waiting" data-right="" data-role="learner" data-rec="idle">
 <div class="l-main">
   <main class="people" id="people" aria-label="People in this lesson">
     <svg class="pstring" aria-hidden="true"><path id="ppath"/><circle id="pA" r="6"/><circle id="pB" r="6"/></svg>
@@ -349,7 +349,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   <div class="linfo"><img src="cans/can-small.svg" alt="">
     <div><b id="ltitle">Your lesson</b><span id="ltime"></span><i class="tprog"><i id="lprog"></i></i></div></div>
 
-  <div class="icons" role="toolbar" aria-label="Lesson">
+  <div class="icons" aria-label="Lesson controls">
     <span class="split"><button class="ib" type="button" id="micBtn" data-tip="Mute my microphone (M)" aria-pressed="false"><span class="disc"><i data-i="mic"></i></span><span class="lbl">Mic</span></button><button class="caret" type="button" data-pop="mic" data-anchor="micBtn" aria-label="Microphone options" aria-expanded="false">&#9650;</button></span>
     <span class="split"><button class="ib" type="button" id="camBtn" data-tip="Turn my camera off (V)" aria-pressed="false"><span class="disc"><i data-i="video"></i></span><span class="lbl">Camera</span></button><button class="caret" type="button" data-pop="cam" data-anchor="camBtn" aria-label="Camera options" aria-expanded="false">&#9650;</button></span>
     <button class="ib" type="button" id="shareBtn" data-pop="share" data-tip="Share a screen or a second camera" aria-expanded="false"><span class="disc"><i data-i="share"></i></span><span class="lbl">Share</span></button>
@@ -462,6 +462,9 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     $$("i[data-i]", root).forEach((el) => { if (!el.firstChild) el.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (I[el.dataset.i] || "") + "</svg>"; });
   }
   icons(document);
+  // every bar button has a spoken name, even when the labels under the icons are hidden
+  function nameFromTip(b) { if (b.dataset.tip) b.setAttribute("aria-label", b.dataset.tip); }
+  $$(".ib[data-tip]").forEach(nameFromTip);
 
   // ---- numbers, the way the app shows them ----
   const posToGain = (p) => 2 * p * p;                                   // tile and lesson volume: 0..2, skew 0.5
@@ -481,7 +484,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   }
 
   // ---- what the app tells us ----
-  let me = { name: myName, role: "teacher", micOff: false, inGain: 1, monitor: false, recvMute: false, volume: 1, level: 0, inDevice: "", outDevice: "" };
+  let me = { name: myName, role: "learner", micOff: false, inGain: 1, monitor: false, recvMute: false, volume: 1, level: 0, inDevice: "", outDevice: "" };
   let conn = "connecting", lessonInfo = { title: "", startsAt: 0, endsAt: 0, joinedAt: Date.now() };
   let audioPeers = [], rec = { phase: "idle", secs: 0 }, docks = { tools: false, board: false };
 
@@ -528,6 +531,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
         </div>
       </div>`;
     icons(t);
+    $(".face.back", t).inert = true;   // not reachable by Tab or screen readers until flipped
     const tile = { name, isAudio, el: t, video: $("video.main", t), pip: $("video.pip", t), avatar: $(".avatar", t), note: $(".note", t),
                    pan: $(".pan input", t), vol: $(".vol input", t), volOut: $(".vol output", t), meter: $(".label .meter i", t), off: $(".label .off", t),
                    bvol: $(".bvol", t), bvolO: $(".bvolO", t), bpan: $(".bpan", t), bpanO: $(".bpanO", t), bmeter: $(".back .meter i", t),
@@ -602,7 +606,12 @@ body:not([data-rec=recording]) .rec-only { display: none; }
 
   function flip(name) {
     state.flipped = name;
-    for (const tile of tiles.values()) tile.el.classList.toggle("flipped", tile.name === name && tile.isAudio);
+    for (const tile of tiles.values()) {
+      const on = tile.name === name && tile.isAudio;
+      tile.el.classList.toggle("flipped", on);
+      $(".face.back", tile.el).inert = !on;
+      $(".face.front", tile.el).inert = on;
+    }
     // with 3 or more people one tile is too small for the options: the flipped one takes the whole area
     body.toggleAttribute("data-flipall", !!name && tiles.size >= 3);
     for (const tile of tiles.values()) tile.el.hidden = body.hasAttribute("data-flipall") && tile.name !== name;
@@ -787,6 +796,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     $("#micBtn").classList.toggle("off", !!me.micOff);
     $("#micBtn").setAttribute("aria-pressed", String(!!me.micOff));
     $("#micBtn").dataset.tip = me.micOff ? "Unmute my microphone (M)" : "Mute my microphone (M)";
+    nameFromTip($("#micBtn"));
     $("#micBtn .lbl").textContent = me.micOff ? "Muted" : "Mic";
     $("#selfOff").hidden = !me.micOff;
     const lvl = me.micOff ? 0 : Math.max(0, Math.min(1, me.level || 0));
@@ -849,9 +859,15 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   }
 
   // ---- popovers (inside the page, anchored to their icon) ----
+  let popOpener = null;
   function closePops() {
+    const wasOpen = $$(".pop.open").length > 0;
     $$(".pop.open").forEach((p) => p.classList.remove("open"));
     $$("[aria-expanded=true]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+    // back to the button that opened it, if focus was inside the popover
+    const a = document.activeElement;
+    if (wasOpen && popOpener && (!a || a === document.body || a.closest(".pop"))) popOpener.focus({ preventScroll: true });
+    popOpener = null;
   }
   function openPop(btn) {
     const id = btn.dataset.pop, pop = $("#pop-" + id), was = pop.classList.contains("open");
@@ -860,6 +876,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     if (id === "cam") listCameras();
     if (id === "mark") { $("#markIn").value = ""; send({ t: "mark", a: "start" }); }
     pop.classList.add("open"); btn.setAttribute("aria-expanded", "true");
+    popOpener = btn;
     if (pop.parentElement.id === "bar") {
       const bar = $("#bar").getBoundingClientRect();
       const anchor = btn.dataset.anchor ? ($("#" + btn.dataset.anchor) || btn) : btn;
@@ -889,7 +906,8 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     list.scrollTop = list.scrollHeight;
     showUnread();
   }
-  function showUnread() { $("#chatBadge").hidden = !unread; $("#chatBadge").textContent = unread > 9 ? "9+" : unread; $("#chatBtn").setAttribute("aria-label", "Chat" + (unread ? ", " + unread + " new" : "")); }
+  function showUnread() { $("#chatBadge").hidden = !unread; $("#chatBadge").textContent = unread > 9 ? "9+" : unread; $("#chatBtn").setAttribute("aria-label", "Chat (C)" + (unread ? ", " + unread + " new" : "")); }
+  showUnread();
   $("#chatForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const text = $("#chatIn").value.trim();
@@ -939,7 +957,6 @@ body:not([data-rec=recording]) .rec-only { display: none; }
   // keyboard: Esc closes, letters toggle (never while typing)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if ($("#pop-mark").classList.contains("open")) send({ t: "mark", a: "save", label: "" });
       closePops(); if (state.flipped) flip(""); return;
     }
     if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== "range" && e.target.type !== "checkbox" || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -967,7 +984,6 @@ body:not([data-rec=recording]) .rec-only { display: none; }
       if (m.t === "state") onState(m);
       else if (m.t === "chat" && Array.isArray(m.items)) addChat(m.items.slice(0, 200));
       else if (m.t === "toast" && typeof m.text === "string") toast(m.text.slice(0, 400), m.ms);
-      else if (m.t === "flip" && typeof m.id === "string") flip(m.id);
     });
   }
 
@@ -999,6 +1015,7 @@ body:not([data-rec=recording]) .rec-only { display: none; }
     $("#camBtn").classList.toggle("off", !camOn);
     $("#camBtn").setAttribute("aria-pressed", String(!camOn));
     $("#camBtn").dataset.tip = camOn ? "Turn my camera off (V)" : "Turn my camera on (V)";
+    nameFromTip($("#camBtn"));
     $("#self .avatar").hidden = camOn && !selfVideo.hidden;
   }
   async function startCamera(deviceId) {

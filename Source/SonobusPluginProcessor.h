@@ -820,6 +820,8 @@ public:
     void setRecordFinishOpens(bool flag) { mRecordFinishOpens = flag; }
 
     bool getReconnectAfterServerLoss() const { return mReconnectAfterServerLoss.get(); }
+    // true while rejoining by itself after the server went away (the lesson goes on)
+    bool isRecoveringFromServerLoss() const { return mRecoveringFromServerLoss; }
     void setReconnectAfterServerLoss(bool flag) { mReconnectAfterServerLoss = flag; }
 
 

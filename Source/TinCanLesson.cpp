@@ -6,6 +6,8 @@
 #include "TinCanTheme.h"
 #include "TinCanVideo.h"
 
+#include <cmath>
+
 namespace TinCan {
 
 static bool isLocalhostHttp(const String & url)
@@ -389,7 +391,13 @@ void LessonView::handleMessage(const var & message)
         setParam(SonobusAudioProcessor::paramWet, jlimit(0.0f, 2.0f, (float) value));
     }
     else if (type == "monitor") {
-        setParam(SonobusAudioProcessor::paramDry, (bool) value ? 1.0f : 0.0f);
+        // keep a monitor level set in All settings: off remembers it, on brings it back
+        float now = getParam(SonobusAudioProcessor::paramDry);
+        if ((bool) value) setParam(SonobusAudioProcessor::paramDry, now > 0.001f ? now : monitorLevel);
+        else {
+            if (now > 0.001f) monitorLevel = now;
+            setParam(SonobusAudioProcessor::paramDry, 0.0f);
+        }
     }
     else if (type == "recvMute") {
         setParam(SonobusAudioProcessor::paramMainRecvMute, (bool) value ? 1.0f : 0.0f);
@@ -400,8 +408,15 @@ void LessonView::handleMessage(const var & message)
     else if (type == "dock") {
         toolsRect = {};
         if (auto * a = message.getProperty("rect", var()).getArray(); a != nullptr && a->size() == 4) {
-            juce::Rectangle<float> r((float) (*a)[0], (float) (*a)[1], (float) (*a)[2], (float) (*a)[3]);
-            if (r.getWidth() > 0.0f && r.getHeight() > 0.0f) toolsRect = r.getIntersection({ 0.0f, 0.0f, 1.0f, 1.0f });
+            float v[4];
+            bool ok = true;
+            for (int k = 0; k < 4; ++k) {
+                const var & x = (*a)[k];
+                v[k] = (x.isDouble() || x.isInt()) ? (float) x : NAN;
+                ok = ok && std::isfinite(v[k]);
+            }
+            juce::Rectangle<float> r(v[0], v[1], v[2], v[3]);
+            if (ok && r.getWidth() > 0.0f && r.getHeight() > 0.0f) toolsRect = r.getIntersection({ 0.0f, 0.0f, 1.0f, 1.0f });
         }
         placeTools();
     }

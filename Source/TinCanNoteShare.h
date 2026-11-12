@@ -77,6 +77,7 @@ private:
     bool showRemote = true;
     bool remoteSharing = false;
     String remoteName;
+    StringArray announced;   // people we told about this lesson
     int64 lastHeardMs = 0;
 
     NoteState mine;                  // what we share: MIDI and mouse notes

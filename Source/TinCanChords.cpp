@@ -57,6 +57,7 @@ const Shape shapes[] = {
 };
 
 constexpr unsigned fifth = 1u << 7;
+constexpr unsigned sevenths = (1u << 10) | (1u << 11);
 
 int countBits(unsigned m) { int c = 0; for (; m; m &= m - 1) ++c; return c; }
 
@@ -96,7 +97,7 @@ Chord identifyChord(const std::vector<int> & notes)
             const auto & sh = shapes[i];
             bool exact = rel == sh.mask;
             // sevenths and up may leave out the fifth (C E Bb = C7)
-            bool noFifth = !exact && countBits(sh.mask) >= 4 && (sh.mask & fifth) && rel == (sh.mask & ~fifth);
+            bool noFifth = !exact && (sh.mask & sevenths) && (sh.mask & fifth) && rel == (sh.mask & ~fifth);
             if (!exact && !noFifth) continue;
             int score = (root == bass ? 1000 : 0) - (noFifth ? 50 : 0) - i;
             if (score > bestScore) {

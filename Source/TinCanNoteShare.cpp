@@ -130,21 +130,33 @@ void NoteShare::forgetRemote()
 
 void NoteShare::receive(const String & from, const String & payload)
 {
+    // only in a lesson: messages still on their way after leaving are dropped
+    if (canShare && !canShare()) return;
+
     std::vector<NoteEvent> events;
     if (!NoteWire::decode(payload.toStdString(), events)) return;
+    auto name = from.substring(0, 80);
+
+    // one person's keys at a time: whoever started first keeps the red keys until they stop or go
+    // quiet, so two sharers never wipe each other's snapshots (QA)
+    if (remoteSharing && name != remoteName) return;
 
     if (payload == NoteWire::encodeStop().c_str()) {
-        if (from == remoteName || remoteName.isEmpty()) forgetRemote();
+        if (remoteSharing) forgetRemote();
         return;
     }
 
-    bool started = !remoteSharing || from != remoteName;
+    bool started = !remoteSharing;
     remoteSharing = true;
-    remoteName = from.substring(0, 80);
+    remoteName = name;
     lastHeardMs = Time::currentTimeMillis();
     if (started) {
         changed();
-        if (onRemoteStarted) onRemoteStarted(remoteName);
+        // the notice once per person per lesson, not each time they come back after a pause
+        if (onRemoteStarted && !announced.contains(name)) {
+            announced.add(name);
+            onRemoteStarted(name);
+        }
         updateTap();
     }
     if (showRemote) deliver(events);
@@ -155,6 +167,7 @@ void NoteShare::lessonEnded()
     sharing = false;
     pending.clear();
     remoteName.clear();
+    announced.clear();
     forgetRemote();
     changed();
     updateTap();
