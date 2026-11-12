@@ -30,6 +30,7 @@
 #include "TinCanAudioSetup.h"
 #include "TinCanWorkspace.h"
 #include "TinCanLesson.h"
+#include "TinCanHome.h"
 
 class RandomSentenceGenerator;
 class WaveformTransportComponent;
@@ -583,6 +584,9 @@ private:
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
     // T-070: the lesson window (one web page over the whole main window) while in a lesson
     std::unique_ptr<TinCan::LessonView> mLessonView;
+    // T-071: the start menu (the website's sign-in and My lessons) whenever we're not in a lesson
+    std::unique_ptr<TinCan::HomeView> mHomeView;
+    void createHomeView();
     TinCan::LessonView::Hooks makeLessonHooks();
     double mMarkPressedAt = -1.0;   // recording time when Mark was pressed in the lesson window
     String mVideoIdentity;  // our own LiveKit identity in this lesson, shared with the others (video tiles)

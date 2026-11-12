@@ -1399,6 +1399,8 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     }
 #endif
 
+    createHomeView();
+
     // first-run audio setup (TinCanAudioSetup.h), once the main window is up
     if (JUCEApplicationBase::isStandaloneApp() && TinCan::AudioSetupWindow::shouldShowOnStartup()) {
         Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
@@ -3447,10 +3449,28 @@ void SonobusAudioProcessorEditor::closeLessonVideo()
     if (mLessonView) {
         mLessonView.reset();
         mMarkPressedAt = -1.0;
+        if (mHomeView) mHomeView->reload();   // My lessons again, with fresh times and Join buttons
         resized();
     }
     mVideoWindow.reset();
     mVideoIdentity.clear();
+}
+
+void SonobusAudioProcessorEditor::createHomeView()
+{
+    // the app only; not in a plugin host, and not when SonoBus's own connect page is wanted for
+    // development (TINCAN_DEV_CONNECT=1). Without WebView2, SonoBus's window stays.
+    if (!JUCEApplicationBase::isStandaloneApp() || !TinCan::isLessonOnly() || !TinCan::isVideoBuild()) return;
+
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    TinCan::HomeView::Hooks hooks;
+    hooks.join = [safeThis](const String & url) { if (safeThis) safeThis->handleTinCanURL(url); };
+    hooks.setup = [safeThis]() { if (safeThis) safeThis->showAudioSetup(true); };
+    mHomeView = TinCan::HomeView::create(std::move(hooks));
+    if (mHomeView) {
+        addAndMakeVisible(mHomeView.get());
+        resized();
+    }
 }
 
 TinCan::NoteShare & SonobusAudioProcessorEditor::getNoteShare()
@@ -5260,6 +5280,12 @@ void SonobusAudioProcessorEditor::resized()
     if (mLessonView) {
         mLessonView->setBounds(getLocalBounds());
         mLessonView->toFront(false);
+    }
+    if (mHomeView) {
+        // the start menu while not in a lesson; hidden (but kept loaded) during one
+        mHomeView->setBounds(getLocalBounds());
+        mHomeView->setVisible(mLessonView == nullptr);
+        if (mLessonView == nullptr) mHomeView->toFront(false);
     }
  
 #if JUCE_IOS || JUCE_ANDROID

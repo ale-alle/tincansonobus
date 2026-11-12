@@ -68,3 +68,13 @@ For design checks without the app, open `lesson.html#demo=1` in a browser. The o
   - `Source/TinCanChords.{h,cpp}`.
   - Tests in `tests/TinCanNoteWireTest.cpp` and `tests/TinCanChordsTest.cpp`.
 - **Testing on one PC:** set `TINCAN_DEMO_NOTES` (e.g. `A3 C4 E4 G4`) for one copy and another value for the second copy. Tools then opens on Instrument with those keys held and shared.
+
+## The start menu (T-071, D-029)
+- **What you see:** outside a lesson, the main window shows the website's own pages: Sign in, My lessons, booking and the teacher pages. They appear in the site's "app mode": CanDuet in the header, Set up your sound and Help, and no marketing menu or footer.
+- **Code:** `Source/TinCanHome.{h,cpp}` (`TinCan::HomeView`) loads `<api base>/my-lessons`. `TINCAN_HOME_PAGE` overrides it for development (https, or http on localhost).
+- **Joining:** My lessons' Join asks the rooms server for the one-time ticket, as before, and posts `{"t":"join","url":"canduet://join?ticket=…"}`. The app joins straight away. Leaving the lesson brings My lessons back, reloaded.
+- **What it may open:** only pages of the site it came from. Every other link opens in the normal browser. A page may ask the app for exactly three things: join, Set up your sound, and opening a Stripe checkout or billing page in the browser.
+- **Payments:** Stripe opens in the browser. My lessons reloads when the CanDuet window gets focus again.
+- **Signing in:** stays on the website. The app never sees a password. The web view keeps the session in `%APPDATA%\CanDuet\WebView2`.
+- **Offline:** if the site can't be reached, a native screen says so, with Try again and Set up your sound.
+- **Fallbacks:** without WebView2, or with `TINCAN_DEV_CONNECT=1`, SonoBus's window stays.

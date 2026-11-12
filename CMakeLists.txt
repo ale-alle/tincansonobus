@@ -410,6 +410,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanNoteShare.h
         Source/TinCanChords.cpp
         Source/TinCanChords.h
+        Source/TinCanHome.cpp
+        Source/TinCanHome.h
         Source/TinCanWorkspace.cpp
         Source/TinCanWorkspace.h
         Source/TinCanRecording.cpp
