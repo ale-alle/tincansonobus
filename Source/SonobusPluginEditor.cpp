@@ -1399,6 +1399,12 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     }
 #endif
 
+    // first-run audio setup (TinCanAudioSetup.h), once the main window is up
+    if (JUCEApplicationBase::isStandaloneApp() && TinCan::AudioSetupWindow::shouldShowOnStartup()) {
+        Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+        Timer::callAfterDelay(1200, [safeThis]() { if (safeThis) safeThis->showAudioSetup(true); });
+    }
+
    // Make sure that before the constructor has finished, you've set the
    // editor's size to whatever you need it to be.
 
@@ -2105,12 +2111,7 @@ void SonobusAudioProcessorEditor::buttonClicked (Button* buttonThatWasClicked)
         
     }
     else if (buttonThatWasClicked == mSetupAudioButton.get()) {
-        if (!settingsCalloutBox) {
-            showSettings(true);
-            if (mOptionsView) {
-                mOptionsView->showAudioTab();
-            }
-        }
+        showAudioSetup(true);
     }
     else if (buttonThatWasClicked == mPatchbayButton.get()) {
         if (!patchbayCalloutBox) {
@@ -3364,6 +3365,35 @@ void SonobusAudioProcessorEditor::showToolsWindow(bool show)
         // closing destroys the window, which stops the MIDI copy; do it after the click returns
         if (safeThis) MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->showToolsWindow(false); });
     });
+}
+
+void SonobusAudioProcessorEditor::showAudioSetup(bool show)
+{
+    if (!show) {
+        mAudioSetupWindow.reset();
+        return;
+    }
+    if (mAudioSetupWindow) {
+        mAudioSetupWindow->toFront(true);
+        return;
+    }
+    if (!getAudioDeviceManager || !getAudioDeviceManager()) return;
+    Component::SafePointer<SonobusAudioProcessorEditor> safeThis(this);
+    // closing destroys the window, so do it after the click returns
+    auto closeLater = [safeThis]() {
+        MessageManager::callAsync([safeThis]() { if (safeThis) safeThis->showAudioSetup(false); });
+    };
+    mAudioSetupWindow = std::make_unique<TinCan::AudioSetupWindow>(processor, *getAudioDeviceManager(), [safeThis, closeLater]() {
+        // "All audio settings...": hand over to Options > Audio
+        if (!safeThis) return;
+        TinCan::AudioSetupWindow::markDone();
+        closeLater();
+        MessageManager::callAsync([safeThis]() {
+            if (!safeThis || safeThis->settingsCalloutBox) return;
+            safeThis->showSettings(true);
+            if (safeThis->mOptionsView) safeThis->mOptionsView->showAudioTab();
+        });
+    }, closeLater);
 }
 
 void SonobusAudioProcessorEditor::showWorkspace()

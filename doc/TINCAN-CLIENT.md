@@ -93,3 +93,12 @@ For testing between two homes, a throwaway Toronto server (stock aooserver + Liv
 
 ## Testing without the web platform
 `scripts/tincan-mock-redeem.py` stands in for the redeem API; `-k|--lesson-key <base64>` sets a key from the command line. Steps in `BUILD-WINDOWS.md` §3b.
+
+## First-run audio setup
+`Source/TinCanAudioSetup.cpp` opens a "Set up your sound" window the first time CanDuet starts, and again whenever someone presses **Setup Audio**. It has four steps:
+1. **Devices:** JUCE's device selector with the advanced settings folded away. The input channel list stays (pick the interface input the mic is on); the output list is hidden.
+2. **Microphone:** a live level bar rated waiting / quiet / good / too loud.
+3. **Headphones:** a test beep, plus "I'm using headphones" (pre-ticked when the output's name says headphones or headset).
+4. **Summary:** the sound card's delay (Good ≤ 25 ms, OK ≤ 45 ms, High), with tips for Bluetooth, high delay, an unheard mic and no headphones.
+
+Finishing, skipping or closing writes `%APPDATA%\CanDuet\audio-setup-done`, so it opens by itself only once; delete that file to see it again. **All audio settings…** closes it and opens Options → Audio. It never blocks joining a lesson. The ratings are in `TinCanAudioCheck.cpp` (no JUCE; covered by TinCanTests).

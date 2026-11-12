@@ -27,6 +27,7 @@
 #include "TinCanJoin.h"
 #include "TinCanTools.h"
 #include "TinCanUpdate.h"
+#include "TinCanAudioSetup.h"
 #include "TinCanWorkspace.h"
 
 class RandomSentenceGenerator;
@@ -578,6 +579,8 @@ private:
     std::unique_ptr<TextButton> mToolsButton;
     std::unique_ptr<TinCan::ToolsWindow> mToolsWindow;
     void showToolsWindow(bool show);
+    void showAudioSetup(bool show);
+    std::unique_ptr<TinCan::AudioSetupWindow> mAudioSetupWindow;
     // lesson workspace (T-037); kept when closed so the board survives
     std::unique_ptr<TinCan::WorkspaceWindow> mWorkspaceWindow;
     void showWorkspace();
