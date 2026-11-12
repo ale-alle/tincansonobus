@@ -7,8 +7,9 @@
 # from another version, so the installer, the app and the site's /app/version.json always agree.
 # Output: release\instoutput\CanDuet-<version>-Setup.exe and its SHA-256 (for the Download page).
 #   release\build-installer.ps1 -Staging      from build-staging\ (TINCAN_API_BASE=https://staging.tincanstudios.ca,
-#                                             docs/OPERATIONS.md "Staging" in the site repo): CanDuet-<version>-Staging-Setup.exe.
-#                                             Same app name and settings folder: a PC has either the staging or the live app.
+#                                             docs/OPERATIONS.md "Staging" in the site repo) into instoutput-staging\, under
+#                                             the live file name so the staging Download page and update check find it.
+#                                             Same app name and canduet:// links: a PC has either the staging or the live app.
 param([switch]$Sign, [switch]$Staging)
 $ErrorActionPreference = "Stop"
 
@@ -21,7 +22,7 @@ if ($cmake -notmatch 'project\(SonoBus VERSION (\d+\.\d+\.\d+)\)') { throw "no p
 $version = $Matches[1]
 
 $exe = Join-Path $built "CanDuet.exe"
-if (-not (Test-Path $exe)) { throw "no Release build at $exe (cmake --build build --config Release --target SonoBus_Standalone)" }
+if (-not (Test-Path $exe)) { throw "no Release build at $exe (cmake --build $(if ($Staging) { 'build-staging' } else { 'build' }) --config Release --target SonoBus_Standalone)" }
 $exeVersion = (Get-Item $exe).VersionInfo.ProductVersion
 if ($exeVersion -ne $version) {
     throw "CanDuet.exe is version '$exeVersion' but CMakeLists.txt says ${version}: rebuild first"
@@ -50,13 +51,12 @@ $page = Join-Path $repo "video-page"
 Copy-Item (Join-Path $page "lesson.html") $lesson
 Copy-Item (Join-Path $page "fonts"), (Join-Path $page "cans") $lesson -Recurse
 
-$out = Join-Path $release "instoutput"
+$out = Join-Path $release $(if ($Staging) { "instoutput-staging" } else { "instoutput" })
 New-Item -ItemType Directory -Force $out | Out-Null
-$setup = Join-Path $out ("CanDuet-$version" + $(if ($Staging) { "-Staging" } else { "" }) + "-Setup.exe")
+$setup = Join-Path $out "CanDuet-$version-Setup.exe"
 if (Test-Path $setup) { Remove-Item $setup -Confirm:$false }
 
 $isccArgs = @("/Q", "/O$out", "/DSBVERSION=$version")
-if ($Staging) { $isccArgs += "/FCanDuet-$version-Staging-Setup" }   # the file name only; same app inside
 if ($Sign) {
     if (-not $env:CANDUET_CERT_FILE) { throw "-Sign needs `$env:CANDUET_CERT_FILE (and CANDUET_CERT_PASSWORD)" }
     $signtool = "signtool.exe sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 " +
