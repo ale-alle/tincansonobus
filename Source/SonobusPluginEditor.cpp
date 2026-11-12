@@ -1326,7 +1326,12 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 
     if (JUCEApplicationBase::isStandaloneApp()) {
 #if !(JUCE_IOS || JUCE_ANDROID)
+        // the built-in connection server (port 10999) is SonoBus's "host on this machine"; lessons always
+        // go through the ticket's server, so shipped builds don't open a listening port on people's PCs.
+        // Development builds keep it for the one-PC tests in BUILD-WINDOWS.md (localhost:10999).
+#if TINCAN_ALLOW_DEV_CONNECT
         processor.startAooServer();
+#endif
 #endif
         setResizable(true, false);
 
@@ -1385,6 +1390,12 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
 #if (JUCE_WINDOWS || JUCE_MAC) && TINCAN_SONOBUS_UPDATER
     if (JUCEApplicationBase::isStandaloneApp()) {
         startTimer(CheckForNewVersionTimerId, 5000);
+    }
+#endif
+#if !TINCAN_SONOBUS_UPDATER && !(JUCE_IOS || JUCE_ANDROID)
+    // T-025: CanDuet's own check against the website (TinCanUpdate.h)
+    if (JUCEApplicationBase::isStandaloneApp()) {
+        mUpdateChecker = std::make_unique<TinCan::UpdateChecker>();
     }
 #endif
 
@@ -1927,6 +1938,18 @@ void SonobusAudioProcessorEditor::timerCallback(int timerid)
             updateState();
         }
         
+        if (mUpdateChecker && mUpdateChecker->isDone()) {
+            mPendingUpdateNotice = mUpdateChecker->getNeed();
+            mPendingUpdateVersion = mUpdateChecker->getLatestVersion();
+            mUpdateChecker.reset();
+        }
+        // "too old for lessons" shows at once; "a new version" waits until no lesson is connected
+        if (mPendingUpdateNotice != TinCan::UpdateNeed::none
+            && (mPendingUpdateNotice == TinCan::UpdateNeed::required || !processor.isConnectedToServer())) {
+            TinCan::showUpdateNotice(mPendingUpdateNotice, mPendingUpdateVersion);
+            mPendingUpdateNotice = TinCan::UpdateNeed::none;
+        }
+
         double nowstamp = Time::getMillisecondCounterHiRes() * 1e-3;
         if (serverStatusFadeTimestamp > 0.0 && nowstamp >= serverStatusFadeTimestamp) {
             Desktop::getInstance().getAnimator().fadeOut(mMainStatusLabel.get(), 500);

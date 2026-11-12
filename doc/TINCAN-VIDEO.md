@@ -72,7 +72,7 @@ Token claims, signed with the LiveKit API secret (a Worker secret; the client ne
 ### Build (Windows)
 - `TINCAN_VIDEO` (default ON) turns on `JUCE_WEB_BROWSER` + `JUCE_USE_WIN_WEBVIEW2`.
 - CMake downloads the WebView2 SDK `1.0.2903.40` from nuget.org (SHA-256 pinned) into the build folder.
-- A post-build step copies `WebView2Loader.dll` next to `CanDuet.exe`; `distwin.sh` and `wininstaller.iss` ship it.
+- A post-build step copies `WebView2Loader.dll` next to `CanDuet.exe`; `release/build-installer.ps1` and `wininstaller.iss` ship it.
 - `TINCAN_VIDEO_PAGE` (CMake) or the environment variable of the same name (https, or http://localhost) overrides the page address. The default is `<TINCAN_API_BASE>/app/video/`.
 - Code: `Source/TinCanVideo.{h,cpp}`, hooks in `SonobusPluginEditor.cpp` (`handleTinCanURL`, `closeLessonVideo`).
 

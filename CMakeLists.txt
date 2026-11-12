@@ -79,7 +79,9 @@ endif()
 # `project()` command. `project()` sets up some helpful variables that describe source/binary
 # directories, and the current project version. This is a standard CMake command.
 
-project(SonoBus VERSION 1.7.2)
+# CanDuet's own version (T-025): shown in Options, compared with the website's /app/version.json and
+# stamped on the installer by release/build-installer.ps1. Bump it for every installer you publish.
+project(SonoBus VERSION 0.9.0)
 
 set(BUILDVERSION 80)
 
@@ -378,6 +380,10 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/TinCanJoin.h
         Source/TinCanNotes.cpp
         Source/TinCanNotes.h
+        Source/TinCanUpdate.cpp
+        Source/TinCanUpdate.h
+        Source/TinCanVersion.cpp
+        Source/TinCanVersion.h
         Source/TinCanPacketCipher.cpp
         Source/TinCanPacketCipher.h
         Source/TinCanPitch.cpp
@@ -744,11 +750,13 @@ add_executable(TinCanTests EXCLUDE_FROM_ALL
     tests/TinCanInstrumentsTest.cpp
     tests/TinCanBeatClockTest.cpp
     tests/TinCanPitchTest.cpp
+    tests/TinCanVersionTest.cpp
     Source/TinCanPacketCipher.cpp
     Source/TinCanNotes.cpp
     Source/TinCanInstruments.cpp
     Source/TinCanBeatClock.cpp
     Source/TinCanPitch.cpp
+    Source/TinCanVersion.cpp
     deps/monocypher/monocypher.c)
 
 # Tin Can audio tests (JUCE, console): cmake --build build --target TinCanAudioTests --config Release

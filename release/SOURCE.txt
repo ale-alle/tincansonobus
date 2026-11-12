@@ -1,0 +1,5 @@
+CanDuet by Tin Can Studios is free software under the GNU General Public License,
+version 3 or later (see LICENSE.txt). It is based on SonoBus by Jesse Chappell and
+Sonosaurus LLC (https://sonobus.net).
+
+Source code for this version: https://github.com/ale-alle/tincansonobus

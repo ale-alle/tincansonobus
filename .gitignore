@@ -11,3 +11,6 @@ out/
 tickets.env
 canduet-relay-setup/
 CanDuet-Test-*.zip
+release/CanDuet/
+release/instoutput/
+build*.log

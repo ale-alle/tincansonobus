@@ -92,8 +92,47 @@ Each copy opens a "Demo lesson - Video" window; allow the camera when asked. Wit
 2. Run a second copy on another PC (or a phone with SonoBus) and join the same private group with a password via the default server.
 3. Note: this still uses `aoo.sonobus.net` and sends unencrypted peer-to-peer audio — test only with people who know that (D-009 in the tincanstudios-site docs).
 
-## 5. Installer (optional for now)
-`release\wininstaller.iss` builds the installer with Inno Setup. It expects the files staged by `release\distwin.sh` and a code-signing setup (`SignTool=`); for unsigned test builds, comment out the `SignTool`/`SignedUninstaller` lines. It also registers the `canduet://` link handler (T-018). Not yet built or tested with Inno Setup.
+## 5. Installer and updates (T-025)
+**Version.** `project(SonoBus VERSION x.y.z)` in `CMakeLists.txt` is CanDuet's version (0.9.0 = pilot). It shows in Options, goes on the installer, and is what the update check compares.
+
+**Build the installer.** Needs [Inno Setup](https://jrsoftware.org/isdl.php) 6.4 or newer. Use a shipped build: a fresh `build` folder, without `-DTINCAN_ALLOW_DEV_CONNECT=ON`.
+```powershell
+cmake --build build --config Release --target SonoBus_Standalone
+release\build-installer.ps1        # -> release\instoutput\CanDuet-<version>-Setup.exe, prints its SHA-256
+```
+The installer (`release\wininstaller.iss`):
+- Installs for the current user (`%LOCALAPPDATA%\Programs\CanDuet`), so there's no administrator prompt.
+- Registers the `canduet://` link handler in HKCU.
+- Adds a Start-menu entry, an uninstaller (Settings → Apps) and an optional desktop shortcut.
+- Closes a running CanDuet before replacing it.
+- Offers Microsoft's WebView2 page if the PC lacks it (video needs it; audio doesn't).
+
+Settings in `%APPDATA%` survive both upgrades and uninstalling.
+
+**Unsigned (pilot).** Windows SmartScreen shows "Windows protected your PC" for a new unsigned download, and people click **More info → Run anyway**. The website's Download page explains this. When there's a certificate, `release\build-installer.ps1 -Sign` signs the app, the installer and the uninstaller (`$env:CANDUET_CERT_FILE`, `$env:CANDUET_CERT_PASSWORD`, signtool from the Windows SDK).
+
+**Update check.** At start-up the app reads `{TINCAN_API_BASE}/app/version.json` from the website (`public/app/version.json` in the site repo):
+```json
+{"latest": "0.9.0", "minimum": "0.9.0"}
+```
+- **Older than `latest`:** "A new version of CanDuet is ready". Shown once, after the lesson if one is connected.
+- **Older than `minimum`:** "Please update CanDuet", shown straight away. Raise `minimum` only when old apps can't join lessons any more.
+
+Either notice's button opens `{TINCAN_API_BASE}/download`. The app never downloads or runs anything itself. Offline, or with a missing or malformed file, it says nothing.
+
+**Publishing a new version:**
+1. Bump the version in `CMakeLists.txt`.
+2. Build, then run `build-installer.ps1`.
+3. Put the installer on the Download page.
+4. Then raise `latest` in the site's `version.json`.
+
+Test locally with a folder holding `app\version.json`:
+```powershell
+python -m http.server 8795 --bind 127.0.0.1 --directory <folder>
+$env:TINCAN_API_BASE = "http://localhost:8795"; & $exe --multi-instance
+```
+
+**Port 10999.** Shipped builds no longer start SonoBus's built-in connection server (port 10999), so there's no listening port and no firewall prompt for it. Development builds (`TINCAN_ALLOW_DEV_CONNECT=ON`) still start it for the §3b tests.
 
 ## Troubleshooting
 | Symptom | Likely fix |

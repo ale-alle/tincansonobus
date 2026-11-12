@@ -26,6 +26,7 @@
 #include "VDONinjaView.h"
 #include "TinCanJoin.h"
 #include "TinCanTools.h"
+#include "TinCanUpdate.h"
 #include "TinCanWorkspace.h"
 
 class RandomSentenceGenerator;
@@ -567,6 +568,9 @@ private:
     AooServerConnectionInfo currConnectionInfo;
 
     std::unique_ptr<TinCan::TicketRedeemer> mTicketRedeemer;
+    std::unique_ptr<TinCan::UpdateChecker> mUpdateChecker;   // T-025, standalone only
+    TinCan::UpdateNeed mPendingUpdateNotice = TinCan::UpdateNeed::none;
+    String mPendingUpdateVersion;
     std::unique_ptr<TinCan::VideoWindow> mVideoWindow;
     String mVideoIdentity;  // our own LiveKit identity in this lesson, shared with the others (video tiles)
     bool mRetryingWithNewName = false;  // rejoining as "Name 2" because the name was taken; the lesson goes on
