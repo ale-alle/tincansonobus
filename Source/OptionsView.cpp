@@ -362,7 +362,7 @@ OptionsView::OptionsView(SonobusAudioProcessor& proc, std::function<AudioDeviceM
 
     // Tin Can: CanDuet is GPLv3 software based on SonoBus; keep this credit and source link visible
     mCreditsLink = std::make_unique<HyperlinkButton>(TRANS("CanDuet by Tin Can Studios, based on SonoBus by Jesse Chappell (GPLv3) - source code"),
-                                                     URL("https://github.com/ale-alle/tincansonobus"));
+                                                     URL("https://github.com/ale-alle/canduet"));
     mCreditsLink->setFont(Font(12), false, Justification::centredRight);
     mCreditsLink->setTooltip(TRANS("Open the CanDuet source code"));
 

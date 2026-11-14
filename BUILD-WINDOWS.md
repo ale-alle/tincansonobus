@@ -21,7 +21,7 @@ C:\dev\
 ```
 ```powershell
 cd C:\dev
-git clone https://github.com/ale-alle/tincansonobus.git
+git clone https://github.com/ale-alle/canduet.git
 ```
 JUCE, AOO and prebuilt Opus libraries (`deps\windows\Release`) are already inside the repo — nothing else to download.
 

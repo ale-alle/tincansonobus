@@ -14,3 +14,5 @@ CanDuet-Test-*.zip
 release/CanDuet/
 release/instoutput/
 build*.log
+build-staging
+release/instoutput-staging/
